@@ -8,10 +8,7 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.thoughtworks.xstream.XStream;
 import com.thoughtworks.xstream.persistence.XmlArrayList;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.DirectoryStream;
@@ -51,14 +48,7 @@ import randoop.MethodReplacements;
 import randoop.condition.RandoopSpecificationError;
 import randoop.condition.SpecificationCollection;
 import randoop.execution.TestEnvironment;
-import randoop.generation.AbstractGenerator;
-import randoop.generation.ComponentManager;
-import randoop.generation.ForwardGenerator;
-import randoop.generation.InOutMethodSerializer;
-import randoop.generation.RandoopGenerationError;
-import randoop.generation.RandoopListenerManager;
-import randoop.generation.SeedSequences;
-import randoop.generation.TestUtils;
+import randoop.generation.*;
 import randoop.instrument.CoveredClassVisitor;
 import randoop.operation.Operation;
 import randoop.operation.OperationParseException;
@@ -413,8 +403,10 @@ public class GenTests extends GenInputsAbstract {
     Set<Sequence> components = new LinkedHashSet<>();
     components.addAll(SeedSequences.defaultSeeds());
     components.addAll(operationModel.getAnnotatedTestValues());
+    // load seeded test suites
+    components.addAll(TestSuiteReader.readSequencesFromFile(GenInputsAbstract.testseeds));
 
-    ComponentManager componentMgr = new ComponentManager(components);
+        ComponentManager componentMgr = new ComponentManager(components);
     operationModel.addClassLiterals(
         componentMgr, GenInputsAbstract.literals_file, GenInputsAbstract.literals_level);
 
@@ -427,6 +419,7 @@ public class GenTests extends GenInputsAbstract {
       sideEffectFreeMethods.addAll(sideEffectFreeMethodsByType.getValues(keyType));
     }
 
+    // Serialize generated objects
    	InOutObjectsCollector inOutCollector = null;
     if (GenInputsAbstract.serialize_method != null) {
     	XStream xstream = new XStream();
