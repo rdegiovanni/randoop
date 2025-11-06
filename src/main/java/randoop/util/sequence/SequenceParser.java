@@ -219,18 +219,19 @@ public class SequenceParser {
     // occurring in try/catch/finally blocks are not parsed
     compUnit.findAll(TryStmt.class).forEach(Node::remove);
 
-    try {
-      for (ExpressionStmt statement : compUnit.findAll(ExpressionStmt.class)) {
-        //            compUnit.findAll(ExpressionStmt.class).forEach(statement -> {
+    for (ExpressionStmt statement : compUnit.findAll(ExpressionStmt.class)) {
+      //            compUnit.findAll(ExpressionStmt.class).forEach(statement -> {
+      try {
         formattedStatements.addAll(
             parseStatement(statement, originalIndices, indexToParameterTypes));
         statementCounter = formattedStatements.size();
-        //            });
+      } catch (Exception e) {
+        // TODO: log exception during parsing
+        fullyParsed = false;
       }
-    } catch (Exception e) {
-      // TODO: log exception during parsing
-      fullyParsed = false;
+      //            });
     }
+
 
     return formattedStatements;
   }
@@ -280,10 +281,14 @@ public class SequenceParser {
     }
 
     Node decType = childNodes.get(2);
-
+    ResolvedType targetType = null;
+    try {
+      targetType = var.getType().resolve();
+    }
+    catch (Exception e) {}
     randoopStatement.append(
         parseAssignmentValue(
-            var.getType().resolve(),
+            targetType,
             (Expression) decType,
             randoopStatements,
             indexToParameterTypes));
@@ -377,26 +382,26 @@ public class SequenceParser {
 
     } else if (valueExpr instanceof FieldAccessExpr) {
       valueAsRandoopStatement.append(getFieldAccessStatement((FieldAccessExpr) valueExpr, true));
-    } else if (targetType.isArray()
-        && (valueExpr instanceof ArrayCreationExpr || valueExpr instanceof NullLiteralExpr)) {
-      valueAsRandoopStatement.append(
-          getArrayCreationStatement(
-              valueExpr.toString(),
-              valueExpr instanceof NullLiteralExpr
-                  ? null
-                  : ((ArrayCreationExpr) valueExpr).getInitializer().isPresent()
-                      ? ((ArrayCreationExpr) valueExpr).getInitializer().get()
-                      : null,
-              targetType.asArrayType().getComponentType(),
-              randoopStatements));
-    } else if (valueExpr instanceof LiteralExpr || valueExpr instanceof UnaryExpr) {
-      valueAsRandoopStatement.append(getNonReceiverStatement(valueExpr, targetType));
     } else if (valueExpr instanceof MethodCallExpr) {
       valueAsRandoopStatement.append(
           getMethodCallStatement(
               (MethodCallExpr) valueExpr, randoopStatements, indexToParameterTypes));
     } else if (valueExpr instanceof NameExpr) {
       valueAsRandoopStatement.append(((NameExpr) valueExpr).getNameAsString());
+    } else if (targetType.isArray()
+            && (valueExpr instanceof ArrayCreationExpr || valueExpr instanceof NullLiteralExpr)) {
+      valueAsRandoopStatement.append(
+              getArrayCreationStatement(
+                      valueExpr.toString(),
+                      valueExpr instanceof NullLiteralExpr
+                              ? null
+                              : ((ArrayCreationExpr) valueExpr).getInitializer().isPresent()
+                              ? ((ArrayCreationExpr) valueExpr).getInitializer().get()
+                              : null,
+                      targetType.asArrayType().getComponentType(),
+                      randoopStatements));
+    } else if (valueExpr instanceof LiteralExpr || valueExpr instanceof UnaryExpr) {
+      valueAsRandoopStatement.append(getNonReceiverStatement(valueExpr, targetType));
     } else {
       throw new IllegalArgumentException(
           "Unexpected value assignment type " + valueExpr.toString());

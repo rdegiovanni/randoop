@@ -43,15 +43,21 @@ public class TestSuiteReader {
     return sequences;
   }
 
-  private static List<Sequence> readSequencesFromFile(String pathToFile) {
+  public static List<Sequence> readSequencesFromFile(String pathToFile) {
     List<Sequence> sequences = new ArrayList<>();
     CompilationUnit cu = getCompilationUnit(new File(pathToFile));
-    ClassOrInterfaceDeclaration clazz = (ClassOrInterfaceDeclaration) cu.getChildNodes().get(4);
-    for (MethodDeclaration md : getMethods(clazz)) {
-      List<String> imports = getClassImports(cu);
-      String code = replaceObjectConstruction(getMethodCode(md));
-      Sequence seq = getSeqFromCode(code, imports, clazz.getNameAsString());
-      sequences.add(seq);
+    ClassOrInterfaceDeclaration clazz = null;
+    for (Object n : cu.getChildNodes()) {
+      if (n instanceof ClassOrInterfaceDeclaration)
+        clazz = (ClassOrInterfaceDeclaration) n;
+    }
+    if (clazz != null) {
+      for (MethodDeclaration md : getMethods(clazz)) {
+        List<String> imports = getClassImports(cu);
+        String code = replaceObjectConstruction(getMethodCode(md));
+        Sequence seq = getSeqFromCode(code, imports, clazz.getNameAsString());
+        sequences.add(seq);
+      }
     }
     return sequences;
   }
@@ -100,7 +106,14 @@ public class TestSuiteReader {
   }
 
   private static List<MethodDeclaration> getMethods(ClassOrInterfaceDeclaration clazz) {
-    return clazz.getMembers().stream().map(m -> (MethodDeclaration) m).collect(Collectors.toList());
+    List<MethodDeclaration> methods = new ArrayList<>();
+    for (Object m: clazz.getMembers().stream().collect(Collectors.toList())){
+      if (m instanceof MethodDeclaration) {
+        methods.add((MethodDeclaration) m);
+      }
+    }
+    return methods;
+//    return clazz.getMembers().stream().map(m -> (MethodDeclaration) m).collect(Collectors.toList());
   }
 
   private static String replaceObjectConstruction(String code) {
