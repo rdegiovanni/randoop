@@ -218,20 +218,20 @@ public class SequenceParser {
     // find all instances of try statements and remove them from the AST so that statements
     // occurring in try/catch/finally blocks are not parsed
     compUnit.findAll(TryStmt.class).forEach(Node::remove);
+    try {
+      for (ExpressionStmt statement : compUnit.findAll(ExpressionStmt.class)) {
+        //            compUnit.findAll(ExpressionStmt.class).forEach(statement -> {
 
-    for (ExpressionStmt statement : compUnit.findAll(ExpressionStmt.class)) {
-      //            compUnit.findAll(ExpressionStmt.class).forEach(statement -> {
-      try {
-        formattedStatements.addAll(
-            parseStatement(statement, originalIndices, indexToParameterTypes));
-        statementCounter = formattedStatements.size();
-      } catch (Exception e) {
-        // TODO: log exception during parsing
-        fullyParsed = false;
+          formattedStatements.addAll(
+              parseStatement(statement, originalIndices, indexToParameterTypes));
+          statementCounter = formattedStatements.size();
+
+        //            });
       }
-      //            });
+    } catch (Exception e) {
+      // TODO: log exception during parsing
+      fullyParsed = false;
     }
-
 
     return formattedStatements;
   }
