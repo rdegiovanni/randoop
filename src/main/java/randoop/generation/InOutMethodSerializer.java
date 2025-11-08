@@ -50,10 +50,13 @@ public class InOutMethodSerializer implements IEventListener {
 	public void explorationEnd() {
 		closeStream(inOoss);
 		closeStream(outOoss);
+		String op = "";
+		if (operation != null)
+			op = operation.toParsableString();
 		System.out.println(String.format(
 				"\nInOutMethodSerializer: Generated %d input/output tuples for %s method.", 
 				tuplesGenerated,
-				operation.toParsableString()));
+				op));
 	}
 
 	@Override
