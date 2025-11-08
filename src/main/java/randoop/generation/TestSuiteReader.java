@@ -40,6 +40,7 @@ public class TestSuiteReader {
 //        throw new RuntimeException(e);
       }
     }
+    System.out.println("Sequences read from file: " + sequences.size());
     return sequences;
   }
 
@@ -59,6 +60,7 @@ public class TestSuiteReader {
         sequences.add(seq);
       }
     }
+    System.out.println("Sequences read from file: " + sequences.size());
     return sequences;
   }
 
