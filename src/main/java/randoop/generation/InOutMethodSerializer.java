@@ -178,11 +178,13 @@ public class InOutMethodSerializer implements IEventListener {
 	}
 	
 	private void closeStream(List<ObjectOutputStream> loos) {
-		for (ObjectOutputStream oos: loos) {
-			try {
-				oos.close();
-			} catch (IOException e) {
-				throw new Error("Cannot close files in folder: " + outputFolder);
+		if (loos != null) {
+			for (ObjectOutputStream oos : loos) {
+				try {
+					oos.close();
+				} catch (IOException e) {
+					throw new Error("Cannot close files in folder: " + outputFolder);
+				}
 			}
 		}
 	}
