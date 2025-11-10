@@ -382,13 +382,7 @@ public class SequenceParser {
 
     } else if (valueExpr instanceof FieldAccessExpr) {
       valueAsRandoopStatement.append(getFieldAccessStatement((FieldAccessExpr) valueExpr, true));
-    } else if (valueExpr instanceof MethodCallExpr) {
-      valueAsRandoopStatement.append(
-          getMethodCallStatement(
-              (MethodCallExpr) valueExpr, randoopStatements, indexToParameterTypes));
-    } else if (valueExpr instanceof NameExpr) {
-      valueAsRandoopStatement.append(((NameExpr) valueExpr).getNameAsString());
-    } else if (targetType.isArray()
+    } else if (targetType != null && targetType.isArray()
             && (valueExpr instanceof ArrayCreationExpr || valueExpr instanceof NullLiteralExpr)) {
       valueAsRandoopStatement.append(
               getArrayCreationStatement(
@@ -402,6 +396,12 @@ public class SequenceParser {
                       randoopStatements));
     } else if (valueExpr instanceof LiteralExpr || valueExpr instanceof UnaryExpr) {
       valueAsRandoopStatement.append(getNonReceiverStatement(valueExpr, targetType));
+    } else if (valueExpr instanceof MethodCallExpr) {
+      valueAsRandoopStatement.append(
+          getMethodCallStatement(
+              (MethodCallExpr) valueExpr, randoopStatements, indexToParameterTypes));
+    } else if (valueExpr instanceof NameExpr) {
+      valueAsRandoopStatement.append(((NameExpr) valueExpr).getNameAsString());
     } else {
       throw new IllegalArgumentException(
           "Unexpected value assignment type " + valueExpr.toString());
@@ -722,18 +722,31 @@ public class SequenceParser {
 
     StringBuilder constructorCallStmt = new StringBuilder();
     constructorCallStmt.append(RANDOOP_CONSTRUCTOR_CALL + " : ");
-    ResolvedConstructorDeclaration constDec = constructorCallExpr.resolve();
-    constructorCallStmt.append(
-        constDec
-                .getQualifiedSignature()
-                .replaceAll("<E>", "")
-                .replaceAll("<T>", "")
-                .replaceAll("<K,\\s*V>", "")
-            + " : ");
+    ResolvedConstructorDeclaration constDec = null;
+    try {
+      constDec = constructorCallExpr.resolve();
+      constructorCallStmt.append(
+              constDec
+                      .getQualifiedSignature()
+                      .replaceAll("<E>", "")
+                      .replaceAll("<T>", "")
+                      .replaceAll("<K,\\s*V>", "")
+                      + " : ");
+    }
+    catch (Exception e) {
+      constructorCallStmt.append(
+              constructorCallExpr.getType().asString()
+                      .replaceAll("<E>", "")
+                      .replaceAll("<T>", "")
+                      .replaceAll("<K,\\s*V>", "")
+                      + " : ");
+    }
 
     List<ResolvedParameterDeclaration> argTypes = new ArrayList<ResolvedParameterDeclaration>();
-    for (int i = 0; i < constDec.getNumberOfParams(); i++) {
-      argTypes.add(constDec.getParam(i));
+    if (constDec != null) {
+      for (int i = 0; i < constDec.getNumberOfParams(); i++) {
+        argTypes.add(constDec.getParam(i));
+      }
     }
     constructorCallStmt.append(
         handleMethodArguments(
