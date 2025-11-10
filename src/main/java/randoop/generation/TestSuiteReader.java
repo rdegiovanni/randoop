@@ -39,28 +39,30 @@ public class TestSuiteReader {
       } catch (IOException e) {
 //        throw new RuntimeException(e);
       }
+      System.out.println("TestSuiteReader: Sequences read from file: " + sequences.size());
     }
-    System.out.println("Sequences read from file: " + sequences.size());
     return sequences;
   }
 
   public static List<Sequence> readSequencesFromFile(String pathToFile) {
     List<Sequence> sequences = new ArrayList<>();
-    CompilationUnit cu = getCompilationUnit(new File(pathToFile));
-    ClassOrInterfaceDeclaration clazz = null;
-    for (Object n : cu.getChildNodes()) {
-      if (n instanceof ClassOrInterfaceDeclaration)
-        clazz = (ClassOrInterfaceDeclaration) n;
-    }
-    if (clazz != null) {
-      for (MethodDeclaration md : getMethods(clazz)) {
-        List<String> imports = getClassImports(cu);
-        String code = replaceObjectConstruction(getMethodCode(md));
-        Sequence seq = getSeqFromCode(code, imports, clazz.getNameAsString());
-        sequences.add(seq);
+    if (pathToFile != null) {
+      CompilationUnit cu = getCompilationUnit(new File(pathToFile));
+      ClassOrInterfaceDeclaration clazz = null;
+      for (Object n : cu.getChildNodes()) {
+        if (n instanceof ClassOrInterfaceDeclaration)
+          clazz = (ClassOrInterfaceDeclaration) n;
       }
+      if (clazz != null) {
+        for (MethodDeclaration md : getMethods(clazz)) {
+          List<String> imports = getClassImports(cu);
+          String code = replaceObjectConstruction(getMethodCode(md));
+          Sequence seq = getSeqFromCode(code, imports, clazz.getNameAsString());
+          sequences.add(seq);
+        }
+      }
+      System.out.println("TestSuiteReader: Sequences read from file: " + sequences.size());
     }
-    System.out.println("Sequences read from file: " + sequences.size());
     return sequences;
   }
 
