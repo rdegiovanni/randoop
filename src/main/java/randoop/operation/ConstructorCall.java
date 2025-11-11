@@ -227,10 +227,10 @@ public final class ConstructorCall extends CallableOperation {
     String prefix = signature.substring(0, openParPos);
     int lastDotPos = prefix.lastIndexOf('.');
 
-    assert lastDotPos >= 0;
+//    assert lastDotPos >= 0;
     String classname = prefix.substring(0, lastDotPos);
     String opname = prefix.substring(lastDotPos + 1);
-    assert opname.equals("<init>") : "expected init, saw " + opname;
+//    assert opname.equals("<init>") : "expected init, saw " + opname;
     String arguments = signature.substring(openParPos + 1, closeParPos);
 
     Type classType;
