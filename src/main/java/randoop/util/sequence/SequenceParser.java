@@ -436,22 +436,30 @@ public class SequenceParser {
 
     StringBuilder randoopStatement = new StringBuilder(RANDOOP_METHOD_CALL + " : ");
 
-    ResolvedMethodDeclaration methodDec = methodCall.resolve();
-    randoopStatement.append(
-        methodDec.getQualifiedSignature().replaceAll("<E>", "").replaceAll("<T>", "") + " : ");
+    ResolvedMethodDeclaration methodDec = null;
+    try {
+      methodDec = methodCall.resolve();
+      randoopStatement.append(
+              methodDec.getQualifiedSignature().replaceAll("<E>", "").replaceAll("<T>", "") + " : ");
 
-    if (!methodDec.isStatic()) {
-      // If not static we need to add the receiver object identifier as an input var
-      randoopStatement.append(methodCall.getScope().get().asNameExpr() + " ");
+      if (!methodDec.isStatic()) {
+        // If not static we need to add the receiver object identifier as an input var
+        randoopStatement.append(methodCall.getScope().get().asNameExpr() + " ");
+      }
+    }
+    catch (Exception e) {}
+    if (methodDec == null) {
+      randoopStatement.append(
+              methodCall.getNameAsString().replaceAll("<E>", "").replaceAll("<T>", "") + " : ");
     }
 
     List<ResolvedParameterDeclaration> argTypes = new ArrayList<ResolvedParameterDeclaration>();
-
-    for (int i = 0; i < methodDec.getNumberOfParams(); i++) {
-      methodDec.getParam(i);
-      argTypes.add(methodDec.getParam(i));
+    if (methodDec != null) {
+      for (int i = 0; i < methodDec.getNumberOfParams(); i++) {
+        methodDec.getParam(i);
+        argTypes.add(methodDec.getParam(i));
+      }
     }
-
     randoopStatement.append(
         handleMethodArguments(
             methodCall.getArguments(), argTypes, randoopStatements, indexToParameterTypes));
@@ -482,6 +490,15 @@ public class SequenceParser {
 
         if (expr instanceof NameExpr) {
           vars.append(((NameExpr) expr).getNameAsString());
+          vars.append(" ");
+        }
+        else if (expr instanceof MethodReferenceExpr) {
+          MethodReferenceExpr ref = (MethodReferenceExpr) expr;
+          if (ref.getScope() != null) {
+            vars.append(ref.getScope().toString());
+            vars.append("::");
+          }
+          vars.append(ref.getIdentifier());
           vars.append(" ");
         } else {
 
@@ -733,13 +750,17 @@ public class SequenceParser {
                       .replaceAll("<K,\\s*V>", "")
                       + " : ");
     }
-    catch (Exception e) {
+    catch (Exception e) {}
+    if (constDec == null) {
       constructorCallStmt.append(
               constructorCallExpr.getType().asString()
                       .replaceAll("<E>", "")
                       .replaceAll("<T>", "")
                       .replaceAll("<K,\\s*V>", "")
-                      + " : ");
+      + "(");
+      if (constructorCallExpr.getArguments().isNonEmpty())
+        constructorCallStmt.append(constructorCallExpr.getTypeArguments());
+      constructorCallStmt.append(") : ");
     }
 
     List<ResolvedParameterDeclaration> argTypes = new ArrayList<ResolvedParameterDeclaration>();

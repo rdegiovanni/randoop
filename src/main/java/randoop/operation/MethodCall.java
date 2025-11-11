@@ -241,29 +241,40 @@ public final class MethodCall extends CallableOperation {
     }
 
     Class<?>[] typeArguments;
-    try {
-      typeArguments = TypeArguments.getTypeArgumentsForString(arguments);
-    } catch (OperationParseException e) {
-      throw new OperationParseException(e.getMessage() + " while parsing \"" + signature + "\"");
-    }
     Method m = null;
     try {
-      m = classType.getRuntimeClass().getDeclaredMethod(opname, typeArguments);
-    } catch (NoSuchMethodException e) {
-      try {
-        m = classType.getRuntimeClass().getMethod(opname, typeArguments);
-      } catch (NoSuchMethodException e2) {
-        String msg =
-            "Method "
-                + opname
-                + " with parameters "
-                + Arrays.toString(typeArguments)
-                + " does not exist in "
-                + classType
-                + ": "
-                + e;
-        throw new OperationParseException(msg);
+      for (Method m1: classType.getRuntimeClass().getMethods()){
+        if (m1.getName().contains(opname)){
+          if (m == null)
+            m = m1;
+          else{
+            if (arguments.contains(m1.getParameterTypes()[0].getName()))
+              m = m1;
+          }
+        }
       }
+//      typeArguments = m.getParameterTypes();//TypeArguments.getTypeArgumentsForString(arguments);
+//    } catch (Exception e) {
+//      throw new OperationParseException(e.getMessage() + " while parsing \"" + signature + "\"");
+//    }
+//
+//    try {
+//      m = classType.getRuntimeClass().getDeclaredMethod(opname, typeArguments);
+//    } catch (NoSuchMethodException e) {
+//      try {
+//        m = classType.getRuntimeClass().getMethod(opname, typeArguments);
+    } catch (Exception e) {
+      String msg =
+          "Method "
+              + opname
+              + " with parameters "
+              + arguments
+              + " does not exist in "
+              + classType
+              + ": "
+              + e;
+      throw new OperationParseException(msg);
+
     }
 
     return TypedClassOperation.forMethod(m);

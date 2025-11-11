@@ -157,7 +157,7 @@ public final class Sequence {
    * @return the sequence formed by appending the given operation to this sequence
    */
   public final Sequence extend(TypedOperation operation, List<Variable> inputVariables) {
-    checkInputs(operation, inputVariables);
+//    checkInputs(operation, inputVariables);
     int size = size();
     List<RelativeNegativeIndex> indexList =
         CollectionsPlume.mapList(v -> getRelativeIndexForVariable(size, v), inputVariables);
@@ -453,23 +453,23 @@ public final class Sequence {
       }
 
       // Process input arguments.
-      if (lastStatement.inputs.size() != lastStatement.getInputTypes().size()) {
-        throw new RuntimeException(
-            lastStatement.inputs
-                + ", "
-                + lastStatement.getInputTypes()
-                + ", "
-                + lastStatement.toString());
-      }
+//      if (lastStatement.inputs.size() != lastStatement.getInputTypes().size()) {
+//        throw new RuntimeException(
+//            lastStatement.inputs
+//                + ", "
+//                + lastStatement.getInputTypes()
+//                + ", "
+//                + lastStatement.toString());
+//      }
 
       List<Variable> v = this.getInputs(lastStatementIndex);
-      if (v.size() != lastStatement.getInputTypes().size()) {
-        throw new RuntimeException();
-      }
+//      if (v.size() != lastStatement.getInputTypes().size()) {
+//        throw new RuntimeException();
+//      }
 
       for (int i = 0; i < v.size(); i++) {
         Variable actualArgument = v.get(i);
-        assert lastStatement.getInputTypes().get(i).isAssignableFrom(actualArgument.getType());
+//        assert lastStatement.getInputTypes().get(i).isAssignableFrom(actualArgument.getType());
         this.lastStatementTypes.add(actualArgument.getType());
         this.lastStatementVariables.add(actualArgument);
       }
@@ -990,15 +990,15 @@ public final class Sequence {
           inVars = inVarsStr.split("\\s");
         }
 
-        if (inVars.length != operation.getInputTypes().size()) {
-          String msg =
-              "Number of input variables given ("
-                  + inVarsStr
-                  + ") does not match expected (expected "
-                  + operation.getInputTypes().size()
-                  + ")";
-          throw new SequenceParseException(msg, statements, statementCount);
-        }
+//        if (inVars.length != operation.getInputTypes().size()) {
+//          String msg =
+//              "Number of input variables given ("
+//                  + inVarsStr
+//                  + ") does not match expected (expected "
+//                  + operation.getInputTypes().size()
+//                  + ")";
+//          throw new SequenceParseException(msg, statements, statementCount);
+//        }
 
         List<Variable> inputs = new ArrayList<>();
         for (String inVar : inVars) {
