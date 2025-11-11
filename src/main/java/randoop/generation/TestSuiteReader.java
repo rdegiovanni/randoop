@@ -34,10 +34,10 @@ public class TestSuiteReader {
           List<Sequence> suite_sequences = TestSuiteReader.readSequencesFromFile(line);
           sequences.addAll(suite_sequences);
         }
-      } catch (FileNotFoundException e) {
+//      } catch (FileNotFoundException e) {
 //        throw new RuntimeException(e);
-      } catch (IOException e) {
-//        throw new RuntimeException(e);
+      } catch (Exception e) {
+        System.out.println(e.getMessage());
       }
       System.out.println("TestSuiteReader: Sequences read from file: " + sequences.size());
     }
