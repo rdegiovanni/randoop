@@ -1019,7 +1019,7 @@ public final class Sequence {
         valueMap.put(newVar, sequence.getLastVariable().getDeclIndex());
         statementCount++;
       }
-    } catch (RuntimeException e) {
+    } catch (Exception e) {
       // Saw some other exception that is not a parse error.
       // Throw an error, giving information on the problem.
       StringBuilder b = new StringBuilder();
@@ -1039,7 +1039,7 @@ public final class Sequence {
       for (StackTraceElement s : e.getStackTrace()) {
         b.append(s.toString());
       }
-      throw new Error(b.toString());
+      System.out.println(b);
     }
     return sequence;
   }
