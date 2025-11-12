@@ -113,6 +113,7 @@ public class TestSuiteReader {
     }
     for (ClassOrInterfaceType clazz: classLiteralMap.keySet()){
       sequences.addAll(classLiteralMap.getValues(clazz));
+      System.out.println("Class: " + clazz + ", Literals: " + classLiteralMap.getValues(clazz));
     }
     System.out.println("TestSuiteReader: Literals read from file: " + sequences.size());
     return sequences;

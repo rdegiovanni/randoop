@@ -62,6 +62,8 @@ public abstract class GenInputsAbstract extends CommandHandler {
 
   @Option("File that list the test suites to use as seeds")
   public static Path testseeds = null;
+  @Option("File that list the test suites to extract literals to be used as seeds")
+  public static Path testliterals = null;
   
   /**
    * Treat every class in the given jar file as a class to test. The jarfile must be on the
