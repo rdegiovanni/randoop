@@ -14,13 +14,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.checkerframework.checker.signature.qual.ClassGetName;
 import randoop.DummyVisitor;
+import randoop.main.ClassNameErrorHandler;
 import randoop.main.GenInputsAbstract;
+import randoop.reflection.ClassLiteralExtractor;
+import randoop.reflection.TypeNames;
 import randoop.sequence.ExecutableSequence;
 import randoop.sequence.Sequence;
 import randoop.sequence.SequenceParseException;
 import randoop.test.DummyCheckGenerator;
+import randoop.types.ClassOrInterfaceType;
+import randoop.util.MultiMap;
 import randoop.util.sequence.SequenceParser;
+
+import static randoop.main.GenInputsAbstract.getClassNamesFromFile;
 
 public class TestSuiteReader {
 
@@ -65,6 +75,49 @@ public class TestSuiteReader {
     }
     return sequences;
   }
+
+//  public static List<Sequence> readLiteralsFromFile(Path pathToFile) {
+//    List<Sequence> sequences = new ArrayList<>();
+//    if (pathToFile != null) {
+//      try {
+//        BufferedReader br = new BufferedReader(new FileReader(pathToFile.toFile()));
+//        String line;
+//        while ((line = br.readLine()) != null) {
+//          List<Sequence> suite_sequences = TestSuiteReader.readLiteralsFromFile(line);
+//          sequences.addAll(suite_sequences);
+//        }
+////      } catch (FileNotFoundException e) {
+////        throw new RuntimeException(e);
+//      } catch (Exception e) {
+//        System.out.println(e.getMessage());
+//      }
+//      System.out.println("TestSuiteReader: Literals read from file: " + sequences.size());
+//    }
+//    return sequences;
+//  }
+
+  public static List<Sequence> readLiteralsFromFile(Path pathToFile) {
+    List<Sequence> sequences = new ArrayList<>();
+    MultiMap<ClassOrInterfaceType, Sequence> classLiteralMap = new MultiMap<>();
+    if (pathToFile != null) {
+      for (String classname : getClassNamesFromFile(pathToFile)) {
+        Class<?> c;
+        try {
+          c = TypeNames.getTypeForName(classname);
+          ClassLiteralExtractor extractor = new ClassLiteralExtractor(classLiteralMap);
+          extractor.visitBefore(c);
+        } catch (Exception e) {
+          System.out.println("TestSuiteReader: reading literals error: " + e.getMessage());
+        }
+      }
+    }
+    for (ClassOrInterfaceType clazz: classLiteralMap.keySet()){
+      sequences.addAll(classLiteralMap.getValues(clazz));
+    }
+    System.out.println("TestSuiteReader: Literals read from file: " + sequences.size());
+    return sequences;
+  }
+
 
   public static List<ExecutableSequence> readFromFile(String pathToFile) {
     return readFromFile(new File(pathToFile));
@@ -138,4 +191,5 @@ public class TestSuiteReader {
     execSeq.execute(new DummyVisitor(), new DummyCheckGenerator());
     return execSeq;
   }
+
 }

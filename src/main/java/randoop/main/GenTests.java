@@ -404,7 +404,7 @@ public class GenTests extends GenInputsAbstract {
     components.addAll(SeedSequences.defaultSeeds());
     components.addAll(operationModel.getAnnotatedTestValues());
     // load seeded test suites
-    components.addAll(TestSuiteReader.readSequencesFromFile(GenInputsAbstract.testseeds));
+    components.addAll(TestSuiteReader.readLiteralsFromFile(GenInputsAbstract.testseeds));
 
         ComponentManager componentMgr = new ComponentManager(components);
     operationModel.addClassLiterals(

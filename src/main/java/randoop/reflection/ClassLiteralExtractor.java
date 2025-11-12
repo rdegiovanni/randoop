@@ -17,11 +17,11 @@ import randoop.util.MultiMap;
  *
  * @see OperationModel
  */
-class ClassLiteralExtractor extends DefaultClassVisitor {
+public class ClassLiteralExtractor extends DefaultClassVisitor {
 
   private MultiMap<ClassOrInterfaceType, Sequence> literalMap;
 
-  ClassLiteralExtractor(MultiMap<ClassOrInterfaceType, Sequence> literalMap) {
+  public ClassLiteralExtractor(MultiMap<ClassOrInterfaceType, Sequence> literalMap) {
     this.literalMap = literalMap;
   }
 
