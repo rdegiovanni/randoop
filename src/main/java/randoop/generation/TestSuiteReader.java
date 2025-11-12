@@ -68,7 +68,8 @@ public class TestSuiteReader {
           List<String> imports = getClassImports(cu);
           String code = replaceObjectConstruction(getMethodCode(md));
           Sequence seq = getSeqFromCode(code, imports, clazz.getNameAsString());
-          sequences.add(seq);
+          if (seq.size() > 0)
+            sequences.add(seq);
         }
       }
       System.out.println("TestSuiteReader: Sequences read from file: " + sequences.size());

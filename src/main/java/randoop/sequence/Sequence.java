@@ -990,15 +990,15 @@ public final class Sequence {
           inVars = inVarsStr.split("\\s");
         }
 
-//        if (inVars.length != operation.getInputTypes().size()) {
-//          String msg =
-//              "Number of input variables given ("
-//                  + inVarsStr
-//                  + ") does not match expected (expected "
-//                  + operation.getInputTypes().size()
-//                  + ")";
-//          throw new SequenceParseException(msg, statements, statementCount);
-//        }
+        if (inVars.length != operation.getInputTypes().size()) {
+          String msg =
+              "Number of input variables given ("
+                  + inVarsStr
+                  + ") does not match expected (expected "
+                  + operation.getInputTypes().size()
+                  + ")";
+          throw new SequenceParseException(msg, statements, statementCount);
+        }
 
         List<Variable> inputs = new ArrayList<>();
         for (String inVar : inVars) {

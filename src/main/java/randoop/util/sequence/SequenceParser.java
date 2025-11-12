@@ -437,7 +437,7 @@ public class SequenceParser {
     StringBuilder randoopStatement = new StringBuilder(RANDOOP_METHOD_CALL + " : ");
 
     ResolvedMethodDeclaration methodDec = null;
-    try {
+//    try {
       methodDec = methodCall.resolve();
       randoopStatement.append(
               methodDec.getQualifiedSignature().replaceAll("<E>", "").replaceAll("<T>", "") + " : ");
@@ -446,12 +446,12 @@ public class SequenceParser {
         // If not static we need to add the receiver object identifier as an input var
         randoopStatement.append(methodCall.getScope().get().asNameExpr() + " ");
       }
-    }
-    catch (Exception e) {}
-    if (methodDec == null) {
-      randoopStatement.append(
-              methodCall.getNameAsString().replaceAll("<E>", "").replaceAll("<T>", "") + " : ");
-    }
+//    }
+//    catch (Exception e) {}
+//    if (methodDec == null) {
+//      randoopStatement.append(
+//              methodCall.getNameAsString().replaceAll("<E>", "").replaceAll("<T>", "") + " : ");
+//    }
 
     List<ResolvedParameterDeclaration> argTypes = new ArrayList<ResolvedParameterDeclaration>();
     if (methodDec != null) {
@@ -740,7 +740,7 @@ public class SequenceParser {
     StringBuilder constructorCallStmt = new StringBuilder();
     constructorCallStmt.append(RANDOOP_CONSTRUCTOR_CALL + " : ");
     ResolvedConstructorDeclaration constDec = null;
-    try {
+//    try {
       constDec = constructorCallExpr.resolve();
       constructorCallStmt.append(
               constDec
@@ -749,19 +749,19 @@ public class SequenceParser {
                       .replaceAll("<T>", "")
                       .replaceAll("<K,\\s*V>", "")
                       + " : ");
-    }
-    catch (Exception e) {}
-    if (constDec == null) {
-      constructorCallStmt.append(
-              constructorCallExpr.getType().asString()
-                      .replaceAll("<E>", "")
-                      .replaceAll("<T>", "")
-                      .replaceAll("<K,\\s*V>", "")
-      + "(");
-      if (constructorCallExpr.getArguments().isNonEmpty())
-        constructorCallStmt.append(constructorCallExpr.getTypeArguments());
-      constructorCallStmt.append(") : ");
-    }
+//    }
+//    catch (Exception e) {}
+//    if (constDec == null) {
+//      constructorCallStmt.append(
+//              constructorCallExpr.getType().asString()
+//                      .replaceAll("<E>", "")
+//                      .replaceAll("<T>", "")
+//                      .replaceAll("<K,\\s*V>", "")
+//      + "(");
+//      if (constructorCallExpr.getArguments().isNonEmpty())
+//        constructorCallStmt.append(constructorCallExpr.getTypeArguments());
+//      constructorCallStmt.append(") : ");
+//    }
 
     List<ResolvedParameterDeclaration> argTypes = new ArrayList<ResolvedParameterDeclaration>();
     if (constDec != null) {
