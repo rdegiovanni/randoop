@@ -491,8 +491,7 @@ public class SequenceParser {
         if (expr instanceof NameExpr) {
           vars.append(((NameExpr) expr).getNameAsString());
           vars.append(" ");
-        }
-        else if (expr instanceof MethodReferenceExpr) {
+        } else if (expr instanceof MethodReferenceExpr) {
           MethodReferenceExpr ref = (MethodReferenceExpr) expr;
           if (ref.getScope() != null) {
             vars.append(ref.getScope().toString());
@@ -511,7 +510,7 @@ public class SequenceParser {
           if (expr instanceof FieldAccessExpr) {
 
             addedStatements.add(
-                nextVar + " = " + getFieldAccessStatement((FieldAccessExpr) expr, true));
+                    nextVar + " = " + getFieldAccessStatement((FieldAccessExpr) expr, true));
 
           } else if (expr instanceof LiteralExpr || expr instanceof UnaryExpr) {
 
@@ -525,19 +524,19 @@ public class SequenceParser {
                 ResolvedType arrayType = paramType.getType().asArrayType().getComponentType();
 
                 addedStatements.add(
-                    nextVar
-                        + " = "
-                        + getArrayCreationStatement(
-                            "new " + arrayType.describe() + "[0]",
-                            null,
-                            arrayType,
-                            addedStatements));
+                        nextVar
+                                + " = "
+                                + getArrayCreationStatement(
+                                "new " + arrayType.describe() + "[0]",
+                                null,
+                                arrayType,
+                                addedStatements));
 
               } else {
                 addedStatements.add(
-                    nextVar
-                        + " = "
-                        + getNonReceiverStatement(expr, argTypes.get(argIndex).getType()));
+                        nextVar
+                                + " = "
+                                + getNonReceiverStatement(expr, argTypes.get(argIndex).getType()));
               }
             } else {
               addedStatements.add(nextVar + " = " + getNonReceiverStatement(expr, type));
@@ -551,13 +550,13 @@ public class SequenceParser {
           //                    }
           else if (expr instanceof ObjectCreationExpr) {
             addedStatements.add(
-                nextVar
-                    + " = "
-                    + getConstructorCallStatement(
-                        (ObjectCreationExpr) expr, addedStatements, indexToParameterTypes));
+                    nextVar
+                            + " = "
+                            + getConstructorCallStatement(
+                            (ObjectCreationExpr) expr, addedStatements, indexToParameterTypes));
           } else {
             throw new IllegalArgumentException(
-                "Unsupported argument type: '" + expr.toString() + "'");
+                    "Unsupported argument type: '" + expr.toString() + "'");
           }
         }
       }

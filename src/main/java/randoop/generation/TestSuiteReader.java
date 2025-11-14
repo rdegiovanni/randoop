@@ -67,7 +67,8 @@ public class TestSuiteReader {
         for (MethodDeclaration md : getMethods(clazz)) {
           List<String> imports = getClassImports(cu);
           String code = replaceObjectConstruction(getMethodCode(md));
-          Sequence seq = getSeqFromCode(code, imports, clazz.getNameAsString());
+          String cleaned_code = cleanCode(code);
+          Sequence seq = getSeqFromCode(cleaned_code, imports, clazz.getNameAsString());
           if (seq.size() > 0)
             sequences.add(seq);
         }
@@ -178,6 +179,37 @@ public class TestSuiteReader {
   private static String replaceObjectConstruction(String code) {
     // TODO: Maybe we could try to get other objects, instead of only replace them with strings
     return code.replaceAll("Object\\(\\)", "String()");
+  }
+
+  private static String cleanCode(String code) {
+    String lines[] = code.split("\\r?\\n");
+    String clean_code = "";
+    for(String line : lines) {
+      boolean code_was_refactored = false;
+      // rewrite arrays creation
+      if (line.contains("Arrays.asList(")) {
+        // get parameters
+        int openParPos = line.indexOf('(');
+        int closeParPos = line.indexOf(')');
+        String arguments = line.substring(openParPos + 1, closeParPos);
+        // get array type
+        int openBraPos = line.indexOf('<');
+        int closeBraPos = line.indexOf('>');
+        int assignSymPos = line.indexOf('=');
+        String type = line.substring(openBraPos + 1, closeBraPos);
+        String varName = line.substring(closeBraPos + 1, assignSymPos).trim();
+        if (! (clean_code.contains(arguments) && (clean_code.contains(type+"[]") || clean_code.contains(type+" []")))) {
+          String auxVarName = varName + "_tsr_aux";
+          String auxArrayDef = type + "[] " + auxVarName + " = new " + type + "[]{" + arguments + "};\n";
+          String updatedLine = line.replace(arguments, auxVarName) + "\n";
+          clean_code += auxArrayDef + updatedLine;
+          code_was_refactored = true;
+        }
+      }
+      if (!code_was_refactored)
+        clean_code += line + "\n";
+    }
+    return  clean_code;
   }
 
   private static Sequence getSeqFromCode(String code, List<String> imports, String forClass) {
