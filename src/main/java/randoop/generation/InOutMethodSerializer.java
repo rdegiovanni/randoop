@@ -112,13 +112,13 @@ public class InOutMethodSerializer implements IEventListener {
 					typedLastOp.toParsableString());
 		assert inObjs == inputs.size() : 
 			String.format("Serializing %d inputs but current operation has %d inputs."
-					+ "\nSequence: ", 
+					+ "\nSequence: %s",
 					inObjs, 
 					inputs.size(), 
 					s.toCodeString());
 		assert outObjs == outputs.size() : 
 			String.format("Serializing %d outputs but current operation has %d outputs."
-					+ "\nSequence: ", 
+					+ "\nSequence: %s",
 					outObjs, 
 					outputs.size(), 
 					s.toCodeString());

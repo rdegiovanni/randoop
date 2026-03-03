@@ -6,7 +6,6 @@ import com.github.javaparser.ParseException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.thoughtworks.xstream.XStream;
-import com.thoughtworks.xstream.persistence.XmlArrayList;
 
 import java.io.*;
 import java.net.URI;
@@ -404,7 +403,7 @@ public class GenTests extends GenInputsAbstract {
     components.addAll(SeedSequences.defaultSeeds());
     components.addAll(operationModel.getAnnotatedTestValues());
     // load seeded test suites
-    components.addAll(TestSuiteReader.readSequencesFromFile(GenInputsAbstract.testseeds));
+    components.addAll(LLMBasedTestSuiteReader.readSequencesFromFile(GenInputsAbstract.testseeds));
     components.addAll(TestSuiteReader.readLiteralsFromFile(GenInputsAbstract.testliterals));
 
         ComponentManager componentMgr = new ComponentManager(components);
