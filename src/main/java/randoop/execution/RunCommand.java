@@ -3,6 +3,7 @@ package randoop.execution;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.commons.exec.CommandLine;
@@ -27,11 +28,11 @@ public class RunCommand {
    *
    * @param command the command to be run in the process
    * @param workingDirectory the working directory for the command
-   * @param timeout the timeout in milliseconds for executing the process
+   * @param timeoutMillis the timeout in milliseconds for executing the process
    * @return the {@link Status} capturing the outcome of executing the command
    * @throws CommandException if there is an error running the command
    */
-  static Status run(List<String> command, Path workingDirectory, long timeout)
+  static Status run(List<String> command, Path workingDirectory, long timeoutMillis)
       throws CommandException {
 
     String[] args = command.toArray(new String[0]);
@@ -39,10 +40,11 @@ public class RunCommand {
     cmdLine.addArguments(Arrays.copyOfRange(args, 1, args.length));
 
     DefaultExecuteResultHandler resultHandler = new DefaultExecuteResultHandler();
-    DefaultExecutor executor = new DefaultExecutor();
-    executor.setWorkingDirectory(workingDirectory.toFile());
+    DefaultExecutor executor =
+        DefaultExecutor.builder().setWorkingDirectory(workingDirectory.toFile()).get();
 
-    ExecuteWatchdog watchdog = new ExecuteWatchdog(timeout);
+    ExecuteWatchdog watchdog =
+        ExecuteWatchdog.builder().setTimeout(Duration.ofMillis(timeoutMillis)).get();
     executor.setWatchdog(watchdog);
 
     final ByteArrayOutputStream outStream = new ByteArrayOutputStream();
@@ -52,7 +54,7 @@ public class RunCommand {
 
     Log.logPrintf("RunCommand.run():%n");
     Log.logPrintf("  cd %s; %s%n", workingDirectory, StringsPlume.join(" ", command));
-    Log.logPrintf("  timeout=%s, environment: %s%n", timeout, System.getenv());
+    Log.logPrintf("  timeoutMillis=%s, environment: %s%n", timeoutMillis, System.getenv());
 
     try {
       executor.execute(cmdLine, resultHandler);
@@ -102,7 +104,7 @@ public class RunCommand {
     /** The exit status of the command. */
     public final int exitStatus;
 
-    /** Whether the command process timed out. */
+    /** True if the command process timed out. */
     public final boolean timedOut;
 
     /** The output from running the command. */
@@ -119,7 +121,7 @@ public class RunCommand {
      *
      * @param command the command
      * @param exitStatus the exit status
-     * @param timedOut whether the process timed out
+     * @param timedOut true if the process timed out
      * @param standardOutputLines the lines of process output to standard output
      * @param errorOutputLines the lines of process output to standard error
      */

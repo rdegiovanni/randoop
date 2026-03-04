@@ -1,6 +1,7 @@
 package randoop.test;
 
 import java.util.Objects;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import randoop.Globals;
 
 /**
@@ -10,8 +11,8 @@ import randoop.Globals;
  * <p>When test code is generated in {@link randoop.sequence.ExecutableSequence#toCodeString()}, the
  * methods {@link #toCodeStringPreStatement()} and {@link #toCodeStringPostStatement()} wrap the
  * statement in a try-catch block for the exception, while the implementing classes define {@link
- * #appendTryBehavior(StringBuilder)} and {@link #appendCatchBehavior(StringBuilder)} which handle
- * differences in whether assertions are generated to enforce the expectation of the exception.
+ * #appendTryBehavior} and {@link #appendCatchBehavior} which handle differences in whether
+ * assertions are generated to enforce the expectation of the exception.
  */
 public abstract class ExceptionCheck implements Check {
 
@@ -48,7 +49,7 @@ public abstract class ExceptionCheck implements Check {
    */
   @Override
   @SuppressWarnings("EqualsGetClass")
-  public boolean equals(Object o) {
+  public boolean equals(@Nullable Object o) {
     if (o == this) {
       return true;
     }
@@ -93,8 +94,8 @@ public abstract class ExceptionCheck implements Check {
    * <p>Returns the post-statement portion of the try-catch wrapper. Starts with post-statement
    * try-behavior as determined by a subclass implementation of {@link #appendTryBehavior}, and then
    * closes with the catch clause with the body determined by the sub-class implementation of {@link
-   * #appendCatchBehavior(StringBuilder)}. Catches this exception or the closest public superclass
-   * of the exception.
+   * #appendCatchBehavior}. Catches this exception or the closest public superclass of the
+   * exception.
    *
    * @return the post-statement code text for the expected exception
    */
@@ -113,7 +114,7 @@ public abstract class ExceptionCheck implements Check {
   }
 
   /**
-   * Appends code for catch block behavior corresponding to expected exception.
+   * Appends code for catch block behavior corresponding to an expected exception.
    *
    * @param b the string builder to which code text is to be added
    */
@@ -131,7 +132,7 @@ public abstract class ExceptionCheck implements Check {
    *
    * @return the canonical name of the exception class
    */
-  public String getExceptionName() {
+  public @Nullable String getExceptionName() {
     return exception.getClass().getCanonicalName();
   }
 

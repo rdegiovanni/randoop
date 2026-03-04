@@ -261,16 +261,14 @@ public class TestFilteringTest {
 
     Collection<Sequence> components = new LinkedHashSet<>();
     components.addAll(SeedSequences.defaultSeeds());
-    ComponentManager componentMgr = new ComponentManager(components);
-    RandoopListenerManager listenerMgr = new RandoopListenerManager();
+    ComponentManager componentMgr = new ComponentManager(components, accessibility);
     ForwardGenerator gen =
         new ForwardGenerator(
             new ArrayList<>(operations),
             new LinkedHashSet<TypedOperation>(),
             new GenInputsAbstract.Limits(),
             componentMgr,
-            null,
-            listenerMgr,
+            /* stopper= */ null,
             classesUnderTest);
     GenTests genTests = new GenTests();
     Predicate<ExecutableSequence> isOutputTest =

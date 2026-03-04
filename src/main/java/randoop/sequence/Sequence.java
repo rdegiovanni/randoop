@@ -8,25 +8,25 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.checkerframework.checker.nullness.qual.RequiresNonNull;
 import org.checkerframework.dataflow.qual.Pure;
 import org.checkerframework.dataflow.qual.SideEffectFree;
 import org.plumelib.util.CollectionsPlume;
+import org.plumelib.util.SIList;
 import org.plumelib.util.StringsPlume;
 import randoop.Globals;
 import randoop.main.GenInputsAbstract;
 import randoop.main.RandoopBug;
+import randoop.operation.MethodCall;
 import randoop.operation.OperationParseException;
 import randoop.operation.OperationParser;
 import randoop.operation.TypedOperation;
 import randoop.types.JavaTypes;
 import randoop.types.NonParameterizedType;
 import randoop.types.Type;
-import randoop.util.ListOfLists;
 import randoop.util.Log;
-import randoop.util.OneMoreElementList;
 import randoop.util.Randomness;
-import randoop.util.SimpleArrayList;
-import randoop.util.SimpleList;
 
 /**
  * An immutable sequence of {@link Statement}s.
@@ -38,7 +38,9 @@ import randoop.util.SimpleList;
 public final class Sequence {
 
   /** The list of statements. */
-  public final SimpleList<Statement> statements;
+  public final SIList<Statement> statements;
+
+  // The next two fields are set by computeLastStatementInfo.
 
   /**
    * The variables that are inputs or output for the last statement of this sequence: first the
@@ -46,37 +48,38 @@ public final class Sequence {
    * the values "produced" by some statement of the sequence. Should be final but cannot because of
    * serialization.
    */
-  private transient /*final*/ List<Variable> lastStatementVariables;
+  private final transient List<Variable> lastStatementVariables = new ArrayList<>();
 
   /** The types of elements of {@link #lastStatementVariables}. */
-  private transient /*final*/ List<Type> lastStatementTypes;
+  private final transient List<Type> lastStatementTypes = new ArrayList<>();
 
   /** If true, inline primitive values rather than creating and using a variable. */
   private transient boolean shouldInlineLiterals = true;
 
   /** Create a new, empty sequence. */
   public Sequence() {
-    this(new SimpleArrayList<Statement>(), 0, 0);
+    this(SIList.empty(), 0, 0);
   }
 
   /**
    * Create a sequence that has the given statements and hashCode (hashCode is for optimization).
    *
-   * <p>See {@link #computeHashcode(SimpleList)} for details on the hashCode.
+   * <p>See {@link #computeHashcode(SIList)} for details on the hashCode.
    *
    * @param statements the statements of the new sequence
    * @param hashCode the hashcode for the new sequence
    * @param netSize the net size for the new sequence
    */
-  private Sequence(SimpleList<Statement> statements, int hashCode, int netSize) {
+  @SuppressWarnings("nullness:method.invocation") // initialized enough: computeLastStatementInfo()
+  private Sequence(SIList<Statement> statements, int hashCode, int netSize) {
     if (statements == null) {
       throw new IllegalArgumentException("`statements' argument cannot be null");
     }
     this.statements = statements;
-    this.savedHashCode = hashCode;
-    this.savedNetSize = netSize;
+    this.hashCode = hashCode;
+    this.netSize = netSize;
     this.computeLastStatementInfo();
-    this.activeFlags = new BitSet(this.size());
+    this.activeFlags = new BitSet(statements.size());
     this.setAllActiveFlags();
     this.checkRep();
   }
@@ -86,23 +89,24 @@ public final class Sequence {
    *
    * @param statements the statements
    */
-  public Sequence(SimpleList<Statement> statements) {
+  public Sequence(SIList<Statement> statements) {
     this(statements, computeHashcode(statements), computeNetSize(statements));
   }
 
   /**
-   * Returns a sequence that is of the form "Foo f = null;" where Foo is the given class.
+   * Returns a singleton sequence that is of the form "Foo f = null;" where Foo is the given class.
    *
    * @param c the type for initialized variable
    * @return the sequence consisting of the initialization
    */
   public static Sequence zero(Type c) {
     return new Sequence()
-        .extend(TypedOperation.createNullOrZeroInitializationForType(c), new ArrayList<Variable>());
+        .extend(
+            TypedOperation.createNullOrZeroInitializationForType(c), new ArrayList<Variable>(0));
   }
 
   /**
-   * Creates a sequence corresponding to the given non-null primitive value.
+   * Creates a singleton sequence corresponding to the given non-null primitive value.
    *
    * @param value non-null reference to a primitive or String value
    * @return a {@link Sequence} consisting of a statement created with the object
@@ -127,7 +131,8 @@ public final class Sequence {
   }
 
   /**
-   * Creates a sequence consisting of the given operation given the input.
+   * Creates a sequence that extends the concatenation of {@code inputSequences} with one call
+   * consisting of the given operation given the input.
    *
    * @param operation the operation for the sequence
    * @param inputSequences the sequences computing inputs to the operation
@@ -162,11 +167,9 @@ public final class Sequence {
     List<RelativeNegativeIndex> indexList =
         CollectionsPlume.mapList(v -> getRelativeIndexForVariable(size, v), inputVariables);
     Statement statement = new Statement(operation, indexList);
-    int newNetSize = operation.isNonreceivingValue() ? this.savedNetSize : this.savedNetSize + 1;
+    int newNetSize = operation.isNonreceivingValue() ? this.netSize : this.netSize + 1;
     return new Sequence(
-        new OneMoreElementList<>(this.statements, statement),
-        this.savedHashCode + statement.hashCode(),
-        newNetSize);
+        this.statements.add(statement), this.hashCode + statement.hashCode(), newNetSize);
   }
 
   /**
@@ -201,15 +204,25 @@ public final class Sequence {
    * @return the concatenation of the sequences in the list
    */
   public static Sequence concatenate(List<Sequence> sequences) {
-    List<SimpleList<Statement>> statements1 = new ArrayList<>();
+    List<SIList<Statement>> statements1 = new ArrayList<>(sequences.size());
     int newHashCode = 0;
     int newNetSize = 0;
     for (Sequence c : sequences) {
-      newHashCode += c.savedHashCode;
-      newNetSize += c.savedNetSize;
+      newHashCode += c.hashCode;
+      newNetSize += c.netSize;
       statements1.add(c.statements);
     }
-    return new Sequence(new ListOfLists<>(statements1), newHashCode, newNetSize);
+    return new Sequence(SIList.concat(statements1), newHashCode, newNetSize);
+  }
+
+  /**
+   * Create a new sequence that is the concatenation of the given sequences.
+   *
+   * @param sequences the sequences to concatenate
+   * @return the concatenation of the sequences
+   */
+  public static Sequence concatenate(Sequence... sequences) {
+    return concatenate(Arrays.asList(sequences));
   }
 
   /**
@@ -230,6 +243,32 @@ public final class Sequence {
   @Pure
   public final int size() {
     return statements.size();
+  }
+
+  /**
+   * Returns true if this is empty.
+   *
+   * @return true if this is empty
+   */
+  @Pure
+  public final boolean isEmpty() {
+    return statements.isEmpty();
+  }
+
+  /**
+   * The number of method calls in this sequence.
+   *
+   * @return the number of method calls in this sequence
+   */
+  public final int numMethodCalls() {
+    int result = 0;
+    for (int i = 0; i < statements.size(); i++) {
+      Statement statement = statements.get(i);
+      if (statement.getOperation().getOperation() instanceof MethodCall) {
+        result++;
+      }
+    }
+    return result;
   }
 
   /**
@@ -261,6 +300,15 @@ public final class Sequence {
    */
   List<Type> getTypesForLastStatement() {
     return this.lastStatementTypes;
+  }
+
+  /**
+   * The last statement in the sequence.
+   *
+   * @return the last statement of this sequence
+   */
+  public Statement getLastStatement() {
+    return getStatement(this.statements.size() - 1);
   }
 
   /**
@@ -403,44 +451,33 @@ public final class Sequence {
     return new Variable(this, absoluteIndex);
   }
 
-  /**
-   * The hashcode of a sequence is the sum of each statement's hashcode. This seems good enough, and
-   * it makes computing hashCode of a concatenation of sequences faster (it's just the addition of
-   * each sequence's' hashCode). Otherwise, hashCode computation used to be a hotspot.
-   *
-   * @param statements the list of statements over which to compute the hash code
-   * @return the sum of the hash codes of the statements in the sequence
-   */
-  private static int computeHashcode(SimpleList<Statement> statements) {
-    int hashCode = 0;
-    for (int i = 0; i < statements.size(); i++) {
-      Statement s = statements.get(i);
-      hashCode += s.hashCode();
-    }
-    return hashCode;
-  }
+  /** The net size of this sequence, cached to avoid recomputation. */
+  private final int netSize;
 
   /**
    * Counts the number of statements in a list that are not initializations with a primitive type.
-   * For instance {@code int var7 = 0}.
+   * For instance, {@code int var7 = 0} would not be counted.
+   *
+   * <p>This should only ever be computed once. Thereafter, use variable {@code netSize} directly.
    *
    * @param statements the list of {@link Statement} objects
    * @return count of statements other than primitive initializations
    */
-  private static int computeNetSize(SimpleList<Statement> statements) {
-    int netSize = 0;
-    for (int i = 0; i < statements.size(); i++) {
-      if (!statements.get(i).isNonreceivingInitialization()) {
-        netSize++;
+  private static int computeNetSize(SIList<Statement> statements) {
+    int result = 0;
+    for (Statement s : statements) {
+      if (!s.isNonreceivingInitialization()) {
+        result++;
       }
     }
-    return netSize;
+    return result;
   }
 
   /** Set {@link #lastStatementVariables} and {@link #lastStatementTypes}. */
+  @RequiresNonNull("this.statements")
   private void computeLastStatementInfo() {
-    this.lastStatementTypes = new ArrayList<>();
-    this.lastStatementVariables = new ArrayList<>();
+    assert this.lastStatementTypes.isEmpty();
+    assert this.lastStatementVariables.isEmpty();
 
     if (!this.statements.isEmpty()) {
       int lastStatementIndex = this.statements.size() - 1;
@@ -453,28 +490,29 @@ public final class Sequence {
       }
 
       // Process input arguments.
-//      if (lastStatement.inputs.size() != lastStatement.getInputTypes().size()) {
-//        throw new RuntimeException(
-//            lastStatement.inputs
-//                + ", "
-//                + lastStatement.getInputTypes()
-//                + ", "
-//                + lastStatement.toString());
-//      }
+      if (lastStatement.inputs.size() != lastStatement.getInputTypes().size()) {
+        throw new RuntimeException(
+                lastStatement.inputs
+                        + ", "
+                        + lastStatement.getInputTypes()
+                        + ", "
+                        + lastStatement.toString());
+      }
 
-      List<Variable> v = this.getInputs(lastStatementIndex);
-//      if (v.size() != lastStatement.getInputTypes().size()) {
-//        throw new RuntimeException();
-//      }
+      List<Variable> vars = this.getInputs(lastStatementIndex);
+      if (vars.size() != lastStatement.getInputTypes().size()) {
+        throw new RuntimeException();
+      }
 
-      for (int i = 0; i < v.size(); i++) {
-        Variable actualArgument = v.get(i);
-//        assert lastStatement.getInputTypes().get(i).isAssignableFrom(actualArgument.getType());
+      for (int i = 0; i < vars.size(); i++) {
+        Variable actualArgument = vars.get(i);
+        assert lastStatement.getInputTypes().get(i).isAssignableFrom(actualArgument.getType());
         this.lastStatementTypes.add(actualArgument.getType());
         this.lastStatementVariables.add(actualArgument);
       }
     }
   }
+
 
   /** Representation invariant check. */
   private void checkRep() {
@@ -487,7 +525,7 @@ public final class Sequence {
       throw new RuntimeException("statements == null");
     }
 
-    for (int si = 0; si < this.statements.size(); si++) {
+    for (int si = 0; si < this.statements.size(); si++) { // `si` is used later
 
       Statement statementWithInputs = this.statements.get(si);
 
@@ -544,7 +582,7 @@ public final class Sequence {
   /** Two sequences are equal if their statements(+inputs) are element-wise equal. */
   @SuppressWarnings("ReferenceEquality")
   @Override
-  public final boolean equals(Object o) {
+  public final boolean equals(@Nullable Object o) {
     if (o == this) {
       return true;
     }
@@ -553,7 +591,7 @@ public final class Sequence {
     }
     Sequence other = (Sequence) o;
     if (this.getStatementsWithInputs().size() != other.getStatementsWithInputs().size()) {
-      verifyNotEqual("size", other);
+      verifyDifferentToString("size", other);
       return false;
     }
     for (int i = 0; i < this.statements.size(); i++) {
@@ -564,7 +602,7 @@ public final class Sequence {
         assert other.statements.get(i) == otherStatement;
       }
       if (!thisStatement.equals(otherStatement)) {
-        verifyNotEqual("statement index " + i, other);
+        verifyDifferentToString("statement index " + i, other);
         return false;
       }
     }
@@ -577,15 +615,15 @@ public final class Sequence {
    * @param message a diagnostic message
    * @param other a sequence whose {@link #toString} to compare to this
    */
-  private void verifyNotEqual(String message, Sequence other) {
-    // This method `verifyNotEqual` is not a useful test, because there can be two tests that differ
-    // only in the receiver type of an operation.  For instance, suppose that A is a supertype of B.
-    // Then one test might choose the operation A.f and the other test might choose the operation
-    // B.f, with the same arguments.  The printed representation of the two tests is identical, so
-    // long as f is not static.  (This example is actually a duplicate that we do not want, since
-    // the two tests will dispatch to the same implementation at run time, but for now Randoop can
-    // produce it, so this method is disabled.)
-    if (true) {
+  private void verifyDifferentToString(String message, Sequence other) {
+    // This method `verifyDifferentToString` is not a useful test, because there can be two tests
+    // that differ only in the receiver type of an operation.  For instance, suppose that A is a
+    // supertype of B.  Then one test might choose the operation A.f and the other test might choose
+    // the operation B.f, with the same arguments.  The printed representation of the two tests is
+    // identical, so long as f is not static.  (This example is actually a duplicate that we do not
+    // want, since the two tests will dispatch to the same implementation at run time, but for now
+    // Randoop can produce it, so this method is disabled.)
+    if (true) { // "if (true)" because with just "return;" the compiler complains about dead code.
       return;
     }
 
@@ -610,16 +648,29 @@ public final class Sequence {
     }
   }
 
-  // A saved copy of this sequence's hashcode to avoid recalculation.
-  private final int savedHashCode;
-
-  // A saved copy of this sequence's net size to avoid recomputation.
-  private final int savedNetSize;
+  /** This sequence's hash code, cached to avoid recomputation. */
+  private final int hashCode;
 
   // See comment at computeHashCode method for notes on hashCode.
   @Override
   public final int hashCode() {
-    return savedHashCode;
+    return hashCode;
+  }
+
+  /**
+   * The hashcode of a sequence is the sum of each statement's hashcode. This seems good enough, and
+   * it makes computing hashCode of a concatenation of sequences faster (it's just the addition of
+   * each sequence's hashCode). Otherwise, hashCode computation used to be a hotspot.
+   *
+   * @param statements the list of statements over which to compute the hash code
+   * @return the sum of the hash codes of the statements in the sequence
+   */
+  private static int computeHashcode(SIList<Statement> statements) {
+    int hashCode = 0;
+    for (Statement s : statements) {
+      hashCode += s.hashCode();
+    }
+    return hashCode;
   }
 
   /**
@@ -637,7 +688,7 @@ public final class Sequence {
    *
    * @return the list of all statements in this sequence
    */
-  private SimpleList<Statement> getStatementsWithInputs() {
+  private SIList<Statement> getStatementsWithInputs() {
     // The list is constructed unmodifiable so we can just return it.
     return this.statements;
   }
@@ -659,7 +710,7 @@ public final class Sequence {
   // whose variable may be chosen.  By contrast, this method only considers the last statement, but
   // it considers all its variables, even ones that are not active.
   /**
-   * Return all values of type {@code type} that are produced by, or might be side-effected by, the
+   * Returns all values of type {@code type} that are produced by, or might be side-effected by, the
    * last statement. May return an empty list if {@code onlyReceivers} is true and the only values
    * of the given type are nulls that are passed to the last statement as arguments.
    *
@@ -670,16 +721,62 @@ public final class Sequence {
    */
   public List<Variable> allVariablesForTypeLastStatement(Type type, boolean onlyReceivers) {
     List<Variable> possibleVars = new ArrayList<>(this.lastStatementVariables.size());
-    for (Variable i : this.lastStatementVariables) {
-      Statement s = statements.get(i.index);
-      Type outputType = s.getOutputType();
-      if (type.isAssignableFrom(outputType)
-          && !(onlyReceivers && outputType.isNonreceiverType())
-          && !(onlyReceivers && getCreatingStatement(i).isNonreceivingInitialization())) {
-        possibleVars.add(i);
+    for (Variable var : this.lastStatementVariables) {
+      if (matchesVariable(var, type, onlyReceivers)) {
+        possibleVars.add(var);
       }
     }
     return possibleVars;
+  }
+
+  /**
+   * Returns the first value of type {@code type} that appears in the last statement of this
+   * sequence.
+   *
+   * <p><strong>Example:</strong>
+   *
+   * <pre>{@code
+   * // Sequence of statements:
+   * Integer num = 5;
+   * String text = num.toString();
+   *
+   * // Retrieve the first Integer variable from the last statement.
+   * Variable result = sequence.firstVariableForTypeInLastStatement(Integer.class, false);
+   *
+   * // 'result' refers to 'num'
+   * }</pre>
+   *
+   * <p>The first matching variable is chosen as it is typically the primary object involved in the
+   * last statement.
+   *
+   * @param type return a sequence of this type
+   * @param onlyReceivers if true, only return a sequence that is appropriate to use as a method
+   *     call receiver
+   * @return a variable used in the last statement of the given type, or null if none exists
+   */
+  public @Nullable Variable firstVariableForTypeInLastStatement(Type type, boolean onlyReceivers) {
+    for (Variable var : this.lastStatementVariables) {
+      if (matchesVariable(var, type, onlyReceivers)) {
+        return var;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Checks if the given variable matches the specified type and receiver conditions.
+   *
+   * @param var the variable to check
+   * @param type the type to match
+   * @param onlyReceivers if true, restrict to receiver variables
+   * @return true if the variable matches the criteria, false otherwise
+   */
+  private boolean matchesVariable(Variable var, Type type, boolean onlyReceivers) {
+    Statement s = statements.get(var.index);
+    Type outputType = s.getOutputType();
+    return type.isAssignableFrom(outputType)
+        && !(onlyReceivers && outputType.isNonreceiverType())
+        && !(onlyReceivers && getCreatingStatement(var).isNonreceivingInitialization());
   }
 
   /**
@@ -699,11 +796,7 @@ public final class Sequence {
               "In rVFTLS, no candidates for %svariable with input type %s from statement %s",
               (onlyReceivers ? "receiver " : ""), type, lastStatement));
     }
-    if (possibleVars.size() == 1) {
-      return possibleVars.get(0);
-    } else {
-      return Randomness.randomMember(possibleVars);
-    }
+    return Randomness.randomMember(possibleVars);
   }
 
   /**
@@ -719,7 +812,7 @@ public final class Sequence {
       throw new IllegalArgumentException("type cannot be null.");
     }
     List<Integer> possibleIndices = new ArrayList<>();
-    for (int i = 0; i < size(); i++) {
+    for (int i = 0; i < size(); i++) { // `i` is used in the loop.
       Statement s = statements.get(i);
       if (isActive(i)) {
         Type outputType = s.getOutputType();
@@ -734,12 +827,7 @@ public final class Sequence {
           "Failed to select variable with input type " + type + " from sequence " + this);
     }
 
-    int index;
-    if (possibleIndices.size() == 1) {
-      index = possibleIndices.get(0);
-    } else {
-      index = Randomness.randomMember(possibleIndices);
-    }
+    int index = Randomness.randomMember(possibleIndices);
     return new Variable(this, index);
   }
 
@@ -749,8 +837,13 @@ public final class Sequence {
     }
   }
 
-  // Argument checker for extend method.
-  // These checks should be caught by checkRep() too.
+  /**
+   * Argument checker for {@link #extend} method. These checks should be caught by {@link #checkRep}
+   * too.
+   *
+   * @param operation the operation to add
+   * @param inputVariables the input variables
+   */
   @SuppressWarnings("ReferenceEquality")
   private void checkInputs(TypedOperation operation, List<Variable> inputVariables) {
     if (operation.getInputTypes().size() != inputVariables.size()) {
@@ -889,7 +982,7 @@ public final class Sequence {
    * <p>The first VAR token represents the "output variable" that is the result of the statement
    * call. The VAR tokens appearing after OPERATION represent the "input variables" to the statement
    * call. At the i-th line, the input variable tokens should appear as an output variable for some
-   * previous j-th line, j &lt; i.
+   * previous j-th line, {@code j < i}.
    *
    * <p>Here is an example of a list of lines representing a sequence.
    *
@@ -920,7 +1013,7 @@ public final class Sequence {
    */
   public static Sequence parse(List<String> statements) throws SequenceParseException {
 
-    Map<String, Integer> valueMap = new LinkedHashMap<>();
+    Map<String, Integer> valueMap = new LinkedHashMap<>(statements.size());
     Sequence sequence = new Sequence();
     int statementCount = 0;
     try {
@@ -1000,7 +1093,7 @@ public final class Sequence {
           throw new SequenceParseException(msg, statements, statementCount);
         }
 
-        List<Variable> inputs = new ArrayList<>();
+        List<Variable> inputs = new ArrayList<>(inVars.length);
         for (String inVar : inVars) {
           Integer index = valueMap.get(inVar);
           if (index == null) {
@@ -1080,15 +1173,15 @@ public final class Sequence {
   }
 
   /**
-   * Test whether any statement of this sequence has an operation whose declaring class matches the
-   * given regular expression.
+   * Returns true if any statement of this sequence has an operation whose declaring class matches
+   * the given regular expression.
    *
    * @param classNames the regular expression to test class names
    * @return true if any statement has operation with matching declaring class, false otherwise
    */
   public boolean hasUseOfMatchingClass(Pattern classNames) {
-    for (int i = 0; i < statements.size(); i++) {
-      Type declaringType = statements.get(i).getDeclaringClass();
+    for (Statement s : statements) {
+      Type declaringType = s.getDeclaringClass();
       if (declaringType != null && classNames.matcher(declaringType.getBinaryName()).matches()) {
         return true;
       }
@@ -1097,7 +1190,7 @@ public final class Sequence {
   }
 
   /**
-   * Return a subsequence of this sequence that contains the statement at the given index. It does
+   * Returns a subsequence of this sequence that contains the statement at the given index. It does
    * not necessarily contain the first element of this sequence.
    *
    * <p>The result depends on the compositional structure of this sequence. The implementation
@@ -1107,7 +1200,7 @@ public final class Sequence {
    * @return the sequence containing the index position
    */
   Sequence getSubsequence(int index) {
-    return new Sequence(statements.getSublist(index));
+    return new Sequence(statements.getSublistContaining(index));
   }
 
   /** Write this sequence to the Randoop log. */
@@ -1234,13 +1327,19 @@ public final class Sequence {
    * <p>Now concatenation is easier: to concatenate two sequences, concatenate their statements.
    * Also, we do not need to create any new statements.
    */
-  static final class RelativeNegativeIndex {
+  public static final class RelativeNegativeIndex {
 
+    /** The negative index. */
     public final int index;
 
-    RelativeNegativeIndex(int index) {
+    /**
+     * Create a RelativeNegativeIndex.
+     *
+     * @param index the negative index
+     */
+    public RelativeNegativeIndex(int index) {
       if (index >= 0) {
-        throw new IllegalArgumentException("index should be non-positive: " + index);
+        throw new IllegalArgumentException("index should be negative: " + index);
       }
       this.index = index;
     }
@@ -1251,7 +1350,7 @@ public final class Sequence {
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(@Nullable Object o) {
       if (this == o) {
         return true;
       }

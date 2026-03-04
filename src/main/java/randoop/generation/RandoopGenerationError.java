@@ -7,7 +7,11 @@ public class RandoopGenerationError extends Error {
 
   private static final long serialVersionUID = -2655768762421700468L;
 
+  /** The operation. */
+  @SuppressWarnings("serial")
   private final TypedOperation operation;
+
+  /** The exception that was thrown. */
   private final Throwable exception;
 
   /**
@@ -33,7 +37,7 @@ public class RandoopGenerationError extends Error {
   }
 
   /**
-   * Return the {@code String} representation of the {@link TypedOperation} in this error.
+   * Returns the {@code String} representation of the {@link TypedOperation} in this error.
    *
    * @return the {@code String} representation of the operation
    */
@@ -42,7 +46,7 @@ public class RandoopGenerationError extends Error {
   }
 
   /**
-   * Return the {@code Throwable} for this error.
+   * Returns the {@code Throwable} for this error.
    *
    * @return the {@code Throwable} for this error
    */

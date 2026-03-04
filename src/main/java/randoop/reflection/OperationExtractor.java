@@ -22,6 +22,7 @@ import randoop.operation.TypedOperation;
 import randoop.types.ClassOrInterfaceType;
 import randoop.types.NonParameterizedType;
 import randoop.types.Substitution;
+import randoop.types.Type;
 import randoop.types.TypeTuple;
 import randoop.util.Log;
 
@@ -30,12 +31,15 @@ import randoop.util.Log;
  * objects for a particular {@link ClassOrInterfaceType} through its visit methods as called by
  * {@link ReflectionManager#apply(Class)}.
  *
+ * <p>The returned operations (available by calling the {@link #getOperations()} method) contain any
+ * relevant specification from {@code operationSpecifications}.
+ *
  * @see ReflectionManager
  * @see ClassVisitor
  */
 public class OperationExtractor extends DefaultClassVisitor {
 
-  /** Whether to produce debugging output to the Randoop log. */
+  /** If true, produce debugging output to the Randoop log. */
   private static boolean debug = false;
 
   /** The type of the declaring class for the collected operations. */
@@ -53,7 +57,10 @@ public class OperationExtractor extends DefaultClassVisitor {
   /** The predicate to test accessibility. */
   private final AccessibilityPredicate accessibilityPredicate;
 
-  /** The specifications (pre/post/throws-conditions). */
+  /**
+   * The specifications (pre/post/throws-conditions). Any relevant one is added to the {@code
+   * execSpec} field of the returned {@link TypedOperation}.
+   */
   private final SpecificationCollection operationSpecifications;
 
   /**
@@ -78,7 +85,7 @@ public class OperationExtractor extends DefaultClassVisitor {
    * @param classType the declaring class for collected operations
    * @param reflectionPredicate the reflection predicate
    * @param accessibilityPredicate the predicate for test accessibility
-   * @return the operations in the class that sastisfy the given predicates
+   * @return the operations in the class that satisfy the given predicates
    */
   public static List<TypedOperation> operations(
       ClassOrInterfaceType classType,
@@ -261,6 +268,16 @@ public class OperationExtractor extends DefaultClassVisitor {
   }
 
   /**
+   * Given an array of {@link Class}es, this method converts them into a list of {@link Type}s.
+   *
+   * @param classes an array of classes
+   * @return a list of Types
+   */
+  public static List<Type> classArrayToTypeList(Class<?>[] classes) {
+    return CollectionsPlume.mapList(Type::forClass, classes);
+  }
+
+  /**
    * Creates a visitor object that collects the {@link TypedOperation} objects corresponding to
    * members of the class satisfying the given accessibility and reflection predicates and that
    * don't violate the omit method predicate.
@@ -367,7 +384,7 @@ public class OperationExtractor extends DefaultClassVisitor {
   // TODO: poor name
   private void checkSubTypes(TypedClassOperation operation) {
     ClassOrInterfaceType declaringType = operation.getDeclaringType();
-    if (!classType.isSubtypeOf(declaringType)) {
+    if (!classType.isSubtypeOfOrEqualTo(declaringType)) {
       throw new RandoopBug(
           String.format(
               "Incompatible receiver type for operation %s:%n  %s%nis not a subtype of%n  %s",
@@ -400,6 +417,7 @@ public class OperationExtractor extends DefaultClassVisitor {
     if (debug) {
       Log.logPrintf(
           "OperationExtractor.visit: operation=%s for constructor %s%n", operation, constructor);
+      Log.logPrintf("  omitPredicate=%s%n", StringsPlume.toStringAndClass(omitPredicate));
     }
     checkSubTypes(operation);
     if (!omitPredicate.shouldOmit(operation)) {
@@ -415,6 +433,12 @@ public class OperationExtractor extends DefaultClassVisitor {
             "OperationExtractor.visit: add operation " + StringsPlume.toStringAndClass(operation));
       }
       operations.add(operation);
+    } else {
+      if (debug) {
+        Log.logPrintf(
+            "OperationExtractor.visit: shouldOmit failed %s%n  %s%n",
+            StringsPlume.toStringAndClass(operation), omitPredicate);
+      }
     }
   }
 
@@ -452,6 +476,10 @@ public class OperationExtractor extends DefaultClassVisitor {
           Log.logPrintln("OperationExtractor.visit: operation changed to " + operation);
         }
       }
+    }
+
+    if (debug) {
+      Log.logPrintf("  omitPredicate=%s%n", StringsPlume.toStringAndClass(omitPredicate));
     }
 
     // The declaring type of the method is not necessarily the classType, but may want to omit

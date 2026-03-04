@@ -3,6 +3,7 @@ package randoop.operation;
 import java.lang.reflect.Array;
 import java.util.List;
 import java.util.Objects;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import randoop.ExecutionOutcome;
 import randoop.NormalExecution;
 import randoop.sequence.Variable;
@@ -37,7 +38,7 @@ public class ArrayCreation extends CallableOperation {
   }
 
   @Override
-  public boolean equals(Object obj) {
+  public boolean equals(@Nullable Object obj) {
     if (this == obj) {
       return true;
     }
@@ -68,9 +69,9 @@ public class ArrayCreation extends CallableOperation {
   public ExecutionOutcome execute(Object[] input) {
     assert input.length == 1 : "requires array dimension as input";
     int length = ((Integer) input[0]).intValue();
-    long startTime = System.currentTimeMillis();
+    long startTimeMillis = System.currentTimeMillis();
     Object theArray = Array.newInstance(this.componentType.getRuntimeClass(), length);
-    long totalTime = System.currentTimeMillis() - startTime;
+    long totalTime = System.currentTimeMillis() - startTimeMillis;
     return new NormalExecution(theArray, totalTime);
   }
 

@@ -47,7 +47,7 @@ public class CoverageTracker {
   private final Map<String, Double> branchCoverageMap = new HashMap<>();
 
   /** Names of all the classes under test. */
-  private final Set<@BinaryName String> classesUnderTest = new HashSet<>();
+  protected final Set<@BinaryName String> classesUnderTest = new HashSet<>();
 
   /**
    * Initialize the coverage tracker.
@@ -58,6 +58,9 @@ public class CoverageTracker {
     for (ClassOrInterfaceType classOrInterfaceType : classInterfaceTypes) {
       @SuppressWarnings("signature") // class is non-array, so getName() returns @BinaryName
       @BinaryName String bn = classOrInterfaceType.getRuntimeClass().getName();
+      if (GenInputsAbstract.bloodhound_logging) {
+        System.out.println("classUnderTest: " + bn);
+      }
       classesUnderTest.add(bn);
     }
   }
@@ -73,13 +76,13 @@ public class CoverageTracker {
       try {
         execDataStream = new ByteArrayInputStream(RT.getAgent().getExecutionData(false));
       } catch (IllegalStateException e) {
-        System.err.println(
+        System.out.println(
             "If the error notes: 'JaCoCo agent not started', the issue is likely "
                 + "that the Jacoco agent is not included as a Java agent.");
-        System.err.println(
+        System.out.println(
             "To do so, add "
-                + "'-Xbootclasspath/a:/path/to/jacocoagent.jar -javaagent:jacocoagent.jar' "
-                + "to the command line argument.");
+                + "'-Xbootclasspath/a:/path/to/jacocoagent.jar"
+                + " -javaagent:/path/to/jacocoagent.jar' to the command line argument.");
         throw e;
       }
 
@@ -122,10 +125,8 @@ public class CoverageTracker {
     // produced by Jacoco and store it in the coverageBuilder local variable.
     for (@BinaryName String className : classesUnderTest) {
       String resource = getResourceFromClassName(className);
-      InputStream original = getClass().getResourceAsStream(resource);
-      try {
+      try (InputStream original = getClass().getResourceAsStream(resource)) {
         analyzer.analyzeClass(original, className);
-        original.close();
       } catch (IOException e) {
         throw new Error(e);
       }
@@ -186,7 +187,7 @@ public class CoverageTracker {
 
   /** An {@link ISessionInfoVisitor} that does nothing. */
   private static class DummySessionInfoVisitor implements ISessionInfoVisitor {
-    /** Singleton instance of this class. */
+    /** The singleton instance of this class. */
     public static final DummySessionInfoVisitor instance = new DummySessionInfoVisitor();
 
     /** Initializes the session info visitor. */

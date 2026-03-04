@@ -1,7 +1,6 @@
 package randoop.reflection;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static randoop.main.GenInputsAbstract.ClassLiteralsMode;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -26,6 +25,7 @@ import java.util.regex.Pattern;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.checker.signature.qual.ClassGetName;
 import org.plumelib.util.EntryReader;
+import org.plumelib.util.StringsPlume;
 import org.plumelib.util.UtilPlume;
 import randoop.Globals;
 import randoop.condition.SpecificationCollection;
@@ -57,6 +57,7 @@ import randoop.types.ClassOrInterfaceType;
 import randoop.types.Type;
 import randoop.util.Log;
 import randoop.util.MultiMap;
+import randoop.util.Util;
 
 /**
  * {@code OperationModel} represents the information context from which tests are generated. The
@@ -75,25 +76,29 @@ import randoop.util.MultiMap;
 public class OperationModel {
 
   /** The set of class declaration types for this model. */
-  private Set<ClassOrInterfaceType> classTypes;
+  // TreeSet here for deterministic coverage in the systemTest runNaiveCollectionsTest()
+  private Set<ClassOrInterfaceType> classTypes = new TreeSet<>();
 
-  /** The set of input types for this model. */
-  private Set<Type> inputTypes;
+  /**
+   * The set of input types for this model. It is set by {@link #addClassTypes}, which calls {@link
+   * TypeExtractor}.
+   */
+  private Set<Type> inputTypes = new TreeSet<>();
 
   /** The set of classes used as goals in the covered-class test filter. */
-  private final LinkedHashSet<Class<?>> coveredClassesGoal;
+  private final LinkedHashSet<Class<?>> coveredClassesGoal = new LinkedHashSet<>();
 
-  /** Map for singleton sequences of literals extracted from classes. */
-  private MultiMap<ClassOrInterfaceType, Sequence> classLiteralMap;
+  /** Map from a class to the literals that occur in it. */
+  private MultiMap<ClassOrInterfaceType, Sequence> classLiteralMap = new MultiMap<>();
 
   /** Set of singleton sequences for values from TestValue annotated fields. */
-  private Set<Sequence> annotatedTestValues;
+  private Set<Sequence> annotatedTestValues = new LinkedHashSet<>();
 
   /** Set of object contracts used to generate tests. */
   private ContractSet contracts;
 
   /** Set of concrete operations extracted from classes. */
-  private final Set<TypedOperation> operations;
+  private final Set<TypedOperation> operations = new TreeSet<>();
 
   /** For debugging only. */
   private List<Pattern> omitMethods;
@@ -101,13 +106,22 @@ public class OperationModel {
   /** User-supplied predicate for methods that should not be used during test generation. */
   private OmitMethodsPredicate omitMethodsPredicate;
 
-  /** Create an empty model of test context. */
-  private OperationModel() {
-    // TreeSet here for deterministic coverage in the systemTest runNaiveCollectionsTest()
-    classTypes = new TreeSet<>();
-    inputTypes = new TreeSet<>();
-    classLiteralMap = new MultiMap<>();
-    annotatedTestValues = new LinkedHashSet<>();
+  /**
+   * The types that are SUT-parameters-only types. In other words, these are the types that appear
+   * as formal parameters of methods in the software under test (SUT), but no methods or
+   * constructors in the SUT return these types. {@link randoop.generation.DemandDrivenInputCreator}
+   * tries to create values of these types.
+   *
+   * <p>This is populated by {@link #setSutParameterOnlyTypes}.
+   */
+  private Set<Type> sutParameterOnlyTypes = new LinkedHashSet<>();
+
+  /**
+   * Create an empty model of test context.
+   *
+   * @param omitMethods the patterns for operations that should be omitted
+   */
+  private OperationModel(List<Pattern> omitMethods) {
     contracts = new ContractSet();
     contracts.add(EqualsReflexive.getInstance()); // arity=1
     contracts.add(EqualsSymmetric.getInstance()); // arity=2
@@ -122,10 +136,12 @@ public class OperationModel {
     contracts.add(CompareToTransitive.getInstance()); // arity=3
     contracts.add(SizeToArrayLength.getInstance()); // arity=1
 
-    coveredClassesGoal = new LinkedHashSet<>();
-    operations = new TreeSet<>();
+    this.omitMethods = omitMethods;
+    this.omitMethodsPredicate = new OmitMethodsPredicate(omitMethods);
   }
 
+  // TODO: Much or all of this should be done in the constructor, rather than having a factory
+  // method.
   /**
    * Factory method to construct an operation model for a particular set of classes.
    *
@@ -155,10 +171,7 @@ public class OperationModel {
       SpecificationCollection operationSpecifications)
       throws SignatureParseException, NoSuchMethodException {
 
-    OperationModel model = new OperationModel();
-
-    // for debugging only
-    model.omitMethods = omitMethods;
+    OperationModel model = new OperationModel(omitMethods);
 
     model.addClassTypes(
         accessibility,
@@ -168,13 +181,18 @@ public class OperationModel {
         errorHandler,
         literalsFileList);
 
-    model.omitMethodsPredicate = new OmitMethodsPredicate(omitMethods);
-
+    // Add methods from the classes.
     model.addOperationsFromClasses(accessibility, reflectionPredicate, operationSpecifications);
+    // Add methods from the --methodlist command-line argument.
     model.operations.addAll(
         model.getOperationsFromFile(
             GenInputsAbstract.methodlist, accessibility, reflectionPredicate));
+    // Add the constructor "Object()".
     model.addObjectConstructor();
+
+    if (GenInputsAbstract.call_non_sut_methods) {
+      model.setSutParameterOnlyTypes();
+    }
 
     return model;
   }
@@ -206,7 +224,7 @@ public class OperationModel {
     return createModel(
         accessibility,
         reflectionPredicate,
-        new ArrayList<Pattern>(),
+        new ArrayList<Pattern>(0),
         classnames,
         coveredClassnames,
         errorHandler,
@@ -253,34 +271,31 @@ public class OperationModel {
 
   /**
    * Adds literals to the component manager, by parsing any literals files specified by the user.
-   * Includes literals at different levels indicated by {@link ClassLiteralsMode}.
+   *
+   * <p>Note: Literals from classes under test are automatically extracted by ClassLiteralExtractor
+   * and stored in scopeToConstantStatistics. This method only processes external literals files.
    *
    * @param compMgr the component manager
-   * @param literalsFile the list of literals file names
-   * @param literalsLevel the level of literals to add
    */
-  public void addClassLiterals(
-      ComponentManager compMgr, List<String> literalsFile, ClassLiteralsMode literalsLevel) {
-
-    // Add a (1-element) sequence corresponding to each literal to the component
-    // manager.
-
-    for (String filename : literalsFile) {
-      MultiMap<ClassOrInterfaceType, Sequence> literalmap;
-      if (filename.equals("CLASSES")) {
-        literalmap = classLiteralMap;
+  public void addClassLiterals(ComponentManager compMgr) {
+    // Add sequences from external literals files (ignore "CLASSES").
+    for (String literalsFile : GenInputsAbstract.literals_file) {
+      MultiMap<ClassOrInterfaceType, Sequence> literalMap;
+      if (literalsFile.equals("CLASSES")) {
+        literalMap = classLiteralMap;
       } else {
-        literalmap = LiteralFileReader.parse(filename);
+        literalMap = LiteralFileReader.parse(literalsFile);
       }
 
-      for (ClassOrInterfaceType type : literalmap.keySet()) {
-        Package pkg = (literalsLevel == ClassLiteralsMode.PACKAGE ? type.getPackage() : null);
-        for (Sequence seq : literalmap.getValues(type)) {
-          switch (literalsLevel) {
+      // `literalMap` does not have the `entrySet()` method.
+      for (ClassOrInterfaceType type : literalMap.keySet()) {
+        for (Sequence seq : literalMap.getValues(type)) {
+          switch (GenInputsAbstract.literals_level) {
             case CLASS:
               compMgr.addClassLevelLiteral(type, seq);
               break;
             case PACKAGE:
+              Package pkg = type.getPackage();
               assert pkg != null;
               compMgr.addPackageLevelLiteral(pkg, seq);
               break;
@@ -324,14 +339,16 @@ public class OperationModel {
   public static MultiMap<Type, TypedClassOperation> readOperations(
       @Nullable Path file, boolean ignoreParseError) throws OperationParseException {
     if (file != null) {
-      try (EntryReader er = new EntryReader(file, "(//|#).*$", null)) {
+      try (EntryReader er = new EntryReader(file, false, "(//|#).*$", null)) {
         return OperationModel.readOperations(er, ignoreParseError);
       } catch (IOException e) {
-        String message = String.format("Error while reading file %s: %s%n", file, e.getMessage());
+        String message =
+            String.format(
+                "Error while reading file %s: %s%n", Util.pathAndAbsolute(file), e.getMessage());
         throw new RandoopUsageError(message, e);
       }
     }
-    return new MultiMap<>();
+    return new MultiMap<>(0);
   }
 
   /**
@@ -362,7 +379,7 @@ public class OperationModel {
       } catch (FailedPredicateException e) {
         throw new RandoopBug("This can't happen", e);
       }
-      if (operation.getInputTypes().size() > 0) {
+      if (!operation.getInputTypes().isEmpty()) {
         operationsMap.add(operation.getInputTypes().get(0), operation);
       }
     }
@@ -397,10 +414,13 @@ public class OperationModel {
       throw new RandoopBug("input stream is null for file " + filename);
     }
     // Read method omissions from user-provided file
-    try (EntryReader er = new EntryReader(is, filename, "^#.*", null)) {
+    try (EntryReader er = new EntryReader(is, "UTF-8", filename, false, "^#.*", null)) {
       return OperationModel.readOperations(er, ignoreParseError);
     } catch (IOException e) {
-      String message = String.format("Error while reading file %s: %s%n", filename, e.getMessage());
+      String message =
+          String.format(
+              "Error while reading file %s: %s%n",
+              Util.filenameAndAbsolute(filename), e.getMessage());
       throw new RandoopUsageError(message, e);
     }
   }
@@ -435,12 +455,22 @@ public class OperationModel {
   }
 
   /**
-   * Return the operations of this model as a list.
+   * Returns the operations of this model as a list.
    *
    * @return the operations of this model
    */
   public List<TypedOperation> getOperations() {
     return new ArrayList<>(operations);
+  }
+
+  /**
+   * Returns the (non-null) set of SUT-parameter-only types. May be empty. Demand-driven input
+   * creator {@link randoop.generation.DemandDrivenInputCreator} creates sequences for these types.
+   *
+   * @return the SUT-parameter-only types
+   */
+  public Set<Type> getSutParameterOnlyTypes() {
+    return sutParameterOnlyTypes;
   }
 
   /**
@@ -471,6 +501,7 @@ public class OperationModel {
     return annotatedTestValues;
   }
 
+  /** Output the operations of this model, if logging is enabled. */
   public void log() {
     if (Log.isLoggingOn()) {
       logOperations(GenInputsAbstract.log);
@@ -495,7 +526,7 @@ public class OperationModel {
     try {
       out.write("Operations: (" + operations.size() + ")" + Globals.lineSep);
       for (TypedOperation t : operations) {
-        out.write("  " + t.toString());
+        out.write("  " + StringsPlume.toStringAndClass(t.toString()));
         out.write(Globals.lineSep);
         out.flush();
       }
@@ -613,8 +644,8 @@ public class OperationModel {
             succeeded++;
           } catch (Throwable e) {
             System.out.printf(
-                "Cannot get methods for %s specified via --testclass or --classlist due to"
-                    + " exception:%n%s%n",
+                "Cannot get methods for %s specified via "
+                    + "--testclass or --classlist due to exception:%n%s%n",
                 c.getName(), UtilPlume.stackTraceToString(e));
           }
         }
@@ -651,7 +682,7 @@ public class OperationModel {
       @ClassGetName String classname, ClassNameErrorHandler errorHandler) {
     try {
       return TypeNames.getTypeForName(classname);
-    } catch (ClassNotFoundException e) {
+    } catch (ClassNotFoundException | NoClassDefFoundError e) {
       errorHandler.handle(classname, e);
     } catch (Throwable e) {
       if (e.getCause() != null) {
@@ -677,6 +708,7 @@ public class OperationModel {
     Iterator<ClassOrInterfaceType> itor = classTypes.iterator();
     while (itor.hasNext()) {
       ClassOrInterfaceType classType = itor.next();
+      Log.logPrintf("addOperationsFromClasses: classType=%s%n", classType);
       try {
         Collection<TypedOperation> oneClassOperations =
             OperationExtractor.operations(
@@ -685,6 +717,10 @@ public class OperationModel {
                 omitMethodsPredicate,
                 accessibility,
                 operationSpecifications);
+        Log.logPrintf("addOperationsFromClasses: classType=%s%n", classType);
+        for (TypedOperation op : oneClassOperations) {
+          Log.logPrintf("    %s%n", op);
+        }
         operations.addAll(oneClassOperations);
       } catch (Throwable e) {
         // TODO: What is an example of this?  Should an error be raised, rather than this
@@ -715,7 +751,7 @@ public class OperationModel {
     if (methodSignatures_file == null) {
       return result;
     }
-    try (EntryReader reader = new EntryReader(methodSignatures_file, "(//|#).*$", null)) {
+    try (EntryReader reader = new EntryReader(methodSignatures_file, false, "(//|#).*$", null)) {
       for (String line : reader) {
         String sig = line.trim();
         if (!sig.isEmpty()) {
@@ -731,7 +767,8 @@ public class OperationModel {
         }
       }
     } catch (IOException e) {
-      throw new RandoopUsageError("Problem reading file " + methodSignatures_file, e);
+      throw new RandoopUsageError(
+          "Problem reading file " + Util.pathAndAbsolute(methodSignatures_file), e);
     }
     return result;
   }
@@ -761,7 +798,7 @@ public class OperationModel {
               signature, accessibility, reflectionPredicate));
     }
     if (accessibleObject instanceof Constructor) {
-      return TypedOperation.forConstructor((Constructor) accessibleObject);
+      return TypedOperation.forConstructor((Constructor<?>) accessibleObject);
     } else {
       return TypedOperation.forMethod((Method) accessibleObject);
     }
@@ -778,5 +815,34 @@ public class OperationModel {
     TypedClassOperation operation = TypedOperation.forConstructor(objectConstructor);
     classTypes.add(operation.getDeclaringType());
     operations.add(operation);
+  }
+
+  /**
+   * Sets field {@link OperationModel#sutParameterOnlyTypes} to SUT-parameter types that are not
+   * SUT-return types.
+   */
+  private void setSutParameterOnlyTypes() {
+    // `outputTypes` is all return types of all SUT operations.
+    Set<Type> outputTypes = new LinkedHashSet<>();
+    for (TypedOperation operation : operations) {
+      Type outputType = operation.getOutputType();
+      if (outputType != null) {
+        outputTypes.add(outputType);
+      }
+    }
+
+    // Filter out non-receiver types and Object from the input types.
+    Set<Type> filteredInputTypes = new LinkedHashSet<>();
+    for (Type inputType : inputTypes) {
+      if (!inputType.isNonreceiverType() && !inputType.isArray() && !inputType.isObject()) {
+        filteredInputTypes.add(inputType);
+      }
+    }
+
+    // Compute field `sutParameterOnlyTypes` as the input types that are not in the output types.
+    Set<Type> computed = new LinkedHashSet<>(filteredInputTypes);
+    computed.removeAll(outputTypes);
+    sutParameterOnlyTypes.clear();
+    sutParameterOnlyTypes.addAll(computed);
   }
 }

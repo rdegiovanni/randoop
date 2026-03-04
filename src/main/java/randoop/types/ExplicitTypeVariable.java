@@ -1,11 +1,12 @@
 package randoop.types;
 
 import java.util.Objects;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Represents a type variable that is a type parameter. (See JLS, section 4.3.) */
-class ExplicitTypeVariable extends TypeVariable {
+public class ExplicitTypeVariable extends TypeVariable {
 
-  /** the type parameter */
+  /** The type parameter. */
   private final java.lang.reflect.TypeVariable<?> variable;
 
   /**
@@ -28,7 +29,7 @@ class ExplicitTypeVariable extends TypeVariable {
    * @return true if the type parameters are equal, false otherwise
    */
   @Override
-  public boolean equals(Object obj) {
+  public boolean equals(@Nullable Object obj) {
     if (this == obj) {
       return true;
     }

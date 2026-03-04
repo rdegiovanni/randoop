@@ -32,7 +32,7 @@ public class OperationExtractorTest {
     Class<?> c;
     try {
       c = TypeNames.getTypeForName("randoop.reflection.ConcreteClass");
-    } catch (ClassNotFoundException e) {
+    } catch (ClassNotFoundException | NoClassDefFoundError e) {
       fail("didn't find class: " + e);
       throw new Error("Unreachable");
     }
@@ -62,7 +62,7 @@ public class OperationExtractorTest {
     Class<?> c;
     try {
       c = TypeNames.getTypeForName("randoop.reflection.GenericClass");
-    } catch (ClassNotFoundException e) {
+    } catch (ClassNotFoundException | NoClassDefFoundError e) {
       fail("didn't find class: " + e);
       throw new Error("Unreachable");
     }
@@ -84,7 +84,7 @@ public class OperationExtractorTest {
     Class<?> c;
     try {
       c = TypeNames.getTypeForName(classname);
-    } catch (ClassNotFoundException e) {
+    } catch (ClassNotFoundException | NoClassDefFoundError e) {
       fail("did not find class: " + e);
       throw new Error("Unreachable");
     }
@@ -121,13 +121,13 @@ public class OperationExtractorTest {
     Class<?> c;
     try {
       c = TypeNames.getTypeForName(classname);
-    } catch (ClassNotFoundException e) {
+    } catch (ClassNotFoundException | NoClassDefFoundError e) {
       fail("did not find class: " + e);
       throw new Error("Unreachable");
     }
     ClassOrInterfaceType classType = ClassOrInterfaceType.forClass(c);
     assertFalse(classType.isGeneric());
-    assertFalse(classType.getTypeParameters().size() > 0);
+    assertTrue(classType.getTypeParameters().isEmpty());
     assertFalse(classType.isParameterized());
     final Collection<TypedOperation> operations =
         OperationExtractor.operations(classType, new DefaultReflectionPredicate(), IS_PUBLIC);
@@ -146,14 +146,14 @@ public class OperationExtractorTest {
     Class<?> c;
     try {
       c = TypeNames.getTypeForName(classname);
-    } catch (ClassNotFoundException e) {
+    } catch (ClassNotFoundException | NoClassDefFoundError e) {
       fail("did not find class: " + e);
       throw new Error("Unreachable");
     }
     ClassOrInterfaceType classType = ClassOrInterfaceType.forClass(c);
     assertFalse(classType.isGeneric());
     assertFalse(classType.isParameterized());
-    assertFalse(classType.getTypeParameters().size() > 0);
+    assertTrue(classType.getTypeParameters().isEmpty());
     final OperationExtractor extractor =
         new OperationExtractor(classType, new DefaultReflectionPredicate(), IS_PUBLIC);
     mgr.apply(extractor, classType.getRuntimeClass());
@@ -168,7 +168,7 @@ public class OperationExtractorTest {
     Class<?> c;
     try {
       c = TypeNames.getTypeForName(classname);
-    } catch (ClassNotFoundException e) {
+    } catch (ClassNotFoundException | NoClassDefFoundError e) {
       fail("did not find class: " + e);
       throw new Error("Unreachable");
     }

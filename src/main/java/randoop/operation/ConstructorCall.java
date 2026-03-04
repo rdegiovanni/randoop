@@ -4,6 +4,8 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
+import java.util.StringJoiner;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import randoop.ExceptionalExecution;
 import randoop.ExecutionOutcome;
 import randoop.reflection.ReflectionPredicate;
@@ -45,7 +47,7 @@ public final class ConstructorCall extends CallableOperation {
   }
 
   /**
-   * Return the reflective constructor corresponding to this ConstructorCall.
+   * Returns the reflective constructor corresponding to this ConstructorCall.
    *
    * @return {@link Constructor} object called by this constructor call
    */
@@ -56,17 +58,11 @@ public final class ConstructorCall extends CallableOperation {
   /** Returns concise string representation of this ConstructorCall. */
   @Override
   public String toString() {
-    StringBuilder b = new StringBuilder();
-    b.append(constructor.getName());
-    b.append("(");
+    StringJoiner b = new StringJoiner(", ", constructor.getName() + "(", ")");
     Class<?>[] types = constructor.getParameterTypes();
-    if (types.length > 0) {
-      b.append(types[0].getName());
-      for (int i = 1; i < types.length; i++) {
-        b.append(", ").append(types[i].getName());
-      }
+    for (Class<?> c : types) {
+      b.add(c.getName());
     }
-    b.append(")");
     return b.toString();
   }
 
@@ -123,13 +119,13 @@ public final class ConstructorCall extends CallableOperation {
   }
 
   /**
-   * Tests whether the parameter is a call to the same constructor.
+   * Returns true if the parameter is a call to the same constructor.
    *
    * @param o an object
    * @return true if o is a ConstructorCall referring to same constructor object; false otherwise
    */
   @Override
-  public boolean equals(Object o) {
+  public boolean equals(@Nullable Object o) {
     if (this == o) {
       return true;
     }
@@ -140,7 +136,7 @@ public final class ConstructorCall extends CallableOperation {
     return this.constructor.equals(other.constructor);
   }
 
-  /** hashCode returns the hashCode for the constructor called by this object. */
+  /** Returns the hashCode for the constructor called by this object. */
   @Override
   public int hashCode() {
     if (!hashCodeComputed) {
@@ -236,7 +232,7 @@ public final class ConstructorCall extends CallableOperation {
     Type classType;
     try {
       classType = Type.getTypeforFullyQualifiedName(classname);
-    } catch (ClassNotFoundException e) {
+    } catch (ClassNotFoundException | NoClassDefFoundError e) {
       String msg =
           "Class " + classname + " is not on classpath while parsing \"" + signature + "\"";
       throw new OperationParseException(msg);

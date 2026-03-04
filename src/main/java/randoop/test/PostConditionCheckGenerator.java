@@ -2,6 +2,7 @@ package randoop.test;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import randoop.ExecutionOutcome;
 import randoop.NormalExecution;
 import randoop.NotExecuted;
@@ -13,7 +14,7 @@ import randoop.sequence.Variable;
 /** Checks the given post-conditions after the last statement of a sequence. */
 public class PostConditionCheckGenerator extends TestCheckGenerator {
 
-  /** the post-conditions */
+  /** The post-conditions. */
   private final List<ExecutableBooleanExpression> postConditions;
 
   /**
@@ -26,9 +27,8 @@ public class PostConditionCheckGenerator extends TestCheckGenerator {
   }
 
   /**
-   * Tests all of the the post-conditions against the values in the given {@link
-   * ExecutableSequence}, and if the condition is not satisfied returns a {@link
-   * ErrorRevealingChecks}.
+   * Tests all of the post-conditions against the values in the given {@link ExecutableSequence},
+   * and if the condition is not satisfied returns a {@link ErrorRevealingChecks}.
    *
    * <p>Note that the operation input values passed to the post-condition are the values
    * post-execution.
@@ -52,7 +52,7 @@ public class PostConditionCheckGenerator extends TestCheckGenerator {
         inputs.add(0, DummyVariable.DUMMY);
       }
 
-      List<ExecutableBooleanExpression> failed = new ArrayList<>();
+      List<ExecutableBooleanExpression> failed = new ArrayList<>(postConditions.size());
       for (ExecutableBooleanExpression postCondition : postConditions) {
         if (!postCondition.check(inputValues)) {
           failed.add(postCondition);
@@ -69,8 +69,8 @@ public class PostConditionCheckGenerator extends TestCheckGenerator {
     }
   }
 
-  private Object[] addNullReceiver(Object[] values) {
-    Object[] args = new Object[values.length + 1];
+  private @Nullable Object[] addNullReceiver(Object[] values) {
+    @Nullable Object[] args = new Object[values.length + 1];
     args[0] = null;
     System.arraycopy(values, 0, args, 1, values.length);
     return args;

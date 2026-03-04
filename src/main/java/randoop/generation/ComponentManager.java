@@ -4,9 +4,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.plumelib.util.CollectionsPlume;
+import org.plumelib.util.SIList;
+import randoop.main.GenInputsAbstract;
 import randoop.main.RandoopBug;
 import randoop.operation.TypedClassOperation;
 import randoop.operation.TypedOperation;
+import randoop.reflection.AccessibilityPredicate;
 import randoop.reflection.TypeInstantiator;
 import randoop.sequence.ClassLiterals;
 import randoop.sequence.PackageLiterals;
@@ -16,14 +21,12 @@ import randoop.types.ClassOrInterfaceType;
 import randoop.types.JavaTypes;
 import randoop.types.PrimitiveType;
 import randoop.types.Type;
-import randoop.util.ListOfLists;
 import randoop.util.Log;
-import randoop.util.SimpleList;
 
 /**
- * Stores and provides means to access the component sequences generated during a run of Randoop.
- * "Component sequences" are sequences that Randoop uses to create larger sequences. The collection
- * of sequences is also called Randoop's "pool".
+ * Stores the component sequences generated during a run of Randoop. "Component sequences" are
+ * sequences that Randoop uses to create larger sequences. The collection of sequences is also
+ * called Randoop's "pool".
  *
  * <p>This class manages different collections of component sequences:
  *
@@ -34,35 +37,38 @@ import randoop.util.SimpleList;
  *   <li>Package literals: analogous to class literals but at the package level.
  * </ul>
  *
- * <p>SEED SEQUENCES. Seed sequences are sequences that were not created during the generation
- * process but obtained via other means. They include (1) sequences passed via the constructor, (2)
- * class literals, and (3) package literals. The only different treatment of seed sequences is
- * during calls to the clearGeneratedSequences() method, which removes only general, non-seed
- * components from the collection.
+ * <p>SEED SEQUENCES. Seed sequences are the initial sequences provided to the generation process.
+ * They include (1) sequences passed via the constructor, (2) class literals, and (3) package
+ * literals. The only different treatment of seed sequences is during calls to the
+ * clearGeneratedSequences() method, which removes only general, non-seed components from the
+ * collection.
  */
 public class ComponentManager {
 
-  /** The principal set of sequences used to create other, larger sequences by the generator. */
-  // Is never null. Contains both general components and seed sequences.
+  /**
+   * The principal set of sequences used to create other, larger sequences by the generator.
+   * Contains both general components and seed sequences. Can be reset by calling {@link
+   * #clearGeneratedSequences}.
+   */
   // "gral" probably stands for "general".
   private SequenceCollection gralComponents;
 
   /**
-   * The subset of the sequences that were given pre-generation to the component manager (via its
-   * constructor).
+   * The sequences that were given pre-generation to the component manager (via its constructor).
+   * (Does not include literals, I think?)
+   *
+   * <p>Seeds are all contained in {@link #gralComponents}. This list is kept to restore seeds if
+   * the client calls {@link #clearGeneratedSequences}.
    */
-  // Seeds are all contained in gralComponents. This list is kept to restore seeds if the user calls
-  // clearGeneratedSequences().
   private final Collection<Sequence> gralSeeds;
 
   /**
-   * A set of additional components representing literals that should only be used as input to
-   * specific classes.
+   * Components representing literals that should only be used as input to specific classes.
    *
    * <p>Null if class literals are not used or none were found. At most one of classLiterals and
    * packageliterals is non-null.
    */
-  private ClassLiterals classLiterals = null;
+  private @Nullable ClassLiterals classLiterals = null;
 
   /**
    * A set of additional components representing literals that should only be used as input to
@@ -71,12 +77,36 @@ public class ComponentManager {
    * <p>Null if package literals are not used or none were found. At most one of classLiterals and
    * packageliterals is non-null.
    */
-  private PackageLiterals packageLiterals = null;
+  private @Nullable PackageLiterals packageLiterals = null;
 
-  /** Create an empty component manager, with an empty seed sequence set. */
-  public ComponentManager() {
-    gralComponents = new SequenceCollection();
-    gralSeeds = Collections.unmodifiableSet(Collections.<Sequence>emptySet());
+  /**
+   * Decides which constructors/methods are callable from the generated test code. This predicate
+   * matches the visibility rules chosen for the overall test package. This field exists so that if
+   * the user calls {@link #clearGeneratedSequences}, we can create a new {@link
+   * DemandDrivenInputCreator} with the same accessibility rules.
+   */
+  private final AccessibilityPredicate accessibility;
+
+  /**
+   * Types that are SUT-parameters but not SUT-returned.
+   *
+   * <p>{@link randoop.generation.DemandDrivenInputCreator} will create sequences for these types
+   * when no existing instances are available. This set is kept so that if the user calls {@link
+   * #clearGeneratedSequences}, we can re-add these types to the {@link DemandDrivenInputCreator}
+   * associated with {@link #gralComponents}.
+   *
+   * <p>This variable is used only by {@link #clearGeneratedSequences}.
+   */
+  private final Set<Type> sutParameterOnlyTypes = new LinkedHashSet<>();
+
+  /**
+   * Create an empty component manager, with an immutable empty seed sequence set.
+   *
+   * @param accessibility decides which constructors/methods are callable from the generated test
+   *     code. This predicate matches the visibility rules chosen for the overall test package.
+   */
+  public ComponentManager(AccessibilityPredicate accessibility) {
+    this(Collections.emptySet(), accessibility);
   }
 
   /**
@@ -85,12 +115,32 @@ public class ComponentManager {
    *
    * @param generalSeeds seed sequences. Can be null, in which case the seed sequences set is
    *     considered empty.
+   * @param accessibility decides which constructors/methods are callable from the generated test
+   *     code. This predicate matches the visibility rules chosen for the overall test package.
    */
-  public ComponentManager(Collection<Sequence> generalSeeds) {
+  public ComponentManager(Collection<Sequence> generalSeeds, AccessibilityPredicate accessibility) {
+    if (accessibility == null) {
+      throw new IllegalArgumentException("accessibility must be non-null");
+    }
     Set<Sequence> seedSet = new LinkedHashSet<>(generalSeeds.size());
     seedSet.addAll(generalSeeds);
     this.gralSeeds = Collections.unmodifiableSet(seedSet);
     gralComponents = new SequenceCollection(seedSet);
+    this.accessibility = accessibility;
+    initDemandDrivenIfEnabled();
+  }
+
+  /**
+   * If demand-driven input generation is enabled, set up the demand-driven input creator for the
+   * component manager.
+   */
+  private void initDemandDrivenIfEnabled() {
+    if (GenInputsAbstract.call_non_sut_methods) {
+      DemandDrivenInputCreator ddic =
+          new DemandDrivenInputCreator(
+              gralComponents, gralComponents.getTypeInstantiator(), accessibility);
+      gralComponents.setDemandDrivenInputCreator(ddic);
+    }
   }
 
   /**
@@ -124,11 +174,45 @@ public class ComponentManager {
    * @param pkg the package to add for the sequence
    * @param seq the sequence
    */
-  public void addPackageLevelLiteral(Package pkg, Sequence seq) {
+  public void addPackageLevelLiteral(@Nullable Package pkg, Sequence seq) {
     if (packageLiterals == null) {
       packageLiterals = new PackageLiterals();
     }
     packageLiterals.addSequence(pkg, seq);
+  }
+
+  /**
+   * Register types that are SUT-parameters but not SUT-returned.
+   *
+   * <p>{@link randoop.generation.DemandDrivenInputCreator} will create sequences for these types
+   * when no existing instances are available.
+   *
+   * @param types a set of types that are SUT-parameters but not SUT-returned
+   */
+  public void addSutParameterOnlyTypes(Set<Type> types) {
+    if (types == null || types.isEmpty()) {
+      return;
+    }
+    gralComponents.addSutParameterOnlyTypes(types);
+    this.sutParameterOnlyTypes.addAll(types);
+  }
+
+  /**
+   * Return the {@link DemandDrivenInputCreator} that creates sequences for types that are
+   * SUT-parameters but not SUT-returned.
+   *
+   * @return the {@link DemandDrivenInputCreator} that creates sequences for types that are
+   *     SUT-parameters but not SUT-returned
+   * @throws IllegalStateException if demand-driven input generation is not enabled (i.e., {@code
+   *     GenInputsAbstract.call_non_sut_methods} is false)
+   */
+  public DemandDrivenInputCreator getDemandDrivenInputCreator() {
+    if (GenInputsAbstract.call_non_sut_methods == false) {
+      throw new IllegalStateException(
+          "getDemandDrivenInputCreator() called when demand-driven input generation is disabled. "
+              + "Enable it with --call-non-sut-methods=true.");
+    }
+    return gralComponents.getDemandDrivenInputCreator();
   }
 
   /**
@@ -141,13 +225,21 @@ public class ComponentManager {
   }
 
   /**
-   * Removes any components sequences added so far, except for seed sequences, which are preserved.
+   * Removes any component sequences added so far, except for seed sequences, which are preserved.
    */
   void clearGeneratedSequences() {
     gralComponents = new SequenceCollection(this.gralSeeds);
+    initDemandDrivenIfEnabled();
+    if (!sutParameterOnlyTypes.isEmpty()) {
+      gralComponents.addSutParameterOnlyTypes(sutParameterOnlyTypes);
+    }
   }
 
-  /** @return the set of generated sequences */
+  /**
+   * Returns the set of all generated sequences.
+   *
+   * @return the set of all generated sequences
+   */
   Set<Sequence> getAllGeneratedSequences() {
     return gralComponents.getAllSequences();
   }
@@ -158,7 +250,7 @@ public class ComponentManager {
    * @param cls the query type
    * @return the sequences that create values of the given type
    */
-  SimpleList<Sequence> getSequencesForType(Type cls) {
+  SIList<Sequence> getSequencesForType(Type cls) {
     return gralComponents.getSequencesForType(cls, false, false);
   }
 
@@ -167,48 +259,44 @@ public class ComponentManager {
    * a statement that invokes the given operation. Also includes any applicable class- or
    * package-level literals.
    *
-   * @param operation the statement
-   * @param i the input value index of statement
-   * @param onlyReceivers if true, only return sequences that are appropriate to use as a method
-   *     call receiver
+   * @param operation the operation whose {@code i}th parameter to find values for
+   * @param i an input value index for {@code operation}
+   * @param onlyReceivers if true, the client of this method only returns sequences that are
+   *     appropriate to use as a method call receiver
    * @return the sequences that create values of the given type
    */
   @SuppressWarnings("unchecked")
-  // This method is oddly named, since it does not take as input a type.  However, the method
-  // extensively uses the operation, so refactoring the method to take a type instead would take
-  // some work.
-  SimpleList<Sequence> getSequencesForType(TypedOperation operation, int i, boolean onlyReceivers) {
+  SIList<Sequence> getSequencesForParam(TypedOperation operation, int i, boolean onlyReceivers) {
 
     Type neededType = operation.getInputTypes().get(i);
+    ClassOrInterfaceType declaringCls = ((TypedClassOperation) operation).getDeclaringType();
 
     if (onlyReceivers && neededType.isNonreceiverType()) {
       throw new RandoopBug(
           String.format(
-              "getSequencesForType(%s, %s, %s) neededType=%s",
+              "getSequencesForParam(%s, %s, %s) neededType=%s",
               operation, i, onlyReceivers, neededType));
     }
 
     // This method appends two lists:
-    //  * determines sequences from the pool (gralComponents)
-    //  * determines literals
+    //  * sequences from the pool (gralComponents)
+    //  * literals, which depend on `declaringCls` (defined below)
 
-    SimpleList<Sequence> result =
-        gralComponents.getSequencesForType(neededType, false, onlyReceivers);
+    SIList<Sequence> result = gralComponents.getSequencesForType(neededType, false, onlyReceivers);
 
     // Compute relevant literals.
-    SimpleList<Sequence> literals = null;
+    SIList<Sequence> literals = SIList.empty();
     if (operation instanceof TypedClassOperation
         // Don't add literals for the receiver
         && !onlyReceivers) {
-      // The operation is a method call, where the method is defined in class C.  Augment the
-      // returned list with literals that appear in class C or in its package.  At most one of
-      // classLiterals and packageLiterals is non-null.
+      // The operation is a method call, where the method is defined in class C.
+      // Augment the returned list with literals that appear in class C or in its package.  At most
+      // one of classLiterals and packageLiterals is non-null.
 
-      ClassOrInterfaceType declaringCls = ((TypedClassOperation) operation).getDeclaringType();
       assert declaringCls != null;
 
       if (classLiterals != null) {
-        SimpleList<Sequence> sl = classLiterals.getSequences(declaringCls, neededType);
+        SIList<Sequence> sl = classLiterals.getSequences(declaringCls, neededType);
         if (!sl.isEmpty()) {
           literals = sl;
         }
@@ -217,30 +305,19 @@ public class ComponentManager {
       if (packageLiterals != null) {
         Package pkg = declaringCls.getPackage();
         if (pkg != null) {
-          SimpleList<Sequence> sl = packageLiterals.getSequences(pkg, neededType);
-          if (!sl.isEmpty()) {
-            literals = (literals == null) ? sl : new ListOfLists<>(literals, sl);
-          }
+          @SuppressWarnings("nullness:dereference.of.nullable") // tested above, no side effects
+          SIList<Sequence> sl = packageLiterals.getSequences(pkg, neededType);
+          literals = SIList.concat(literals, sl);
         }
       }
     }
 
-    // Append literals to result.
-    if (literals != null) {
-      if (result == null) {
-        result = literals;
-      } else if (literals == null) {
-        // nothing to do
-      } else {
-        result = new ListOfLists<>(result, literals);
-      }
-    }
-    return result;
+    return SIList.concat(result, literals);
   }
 
   /**
    * Returns all sequences that represent primitive values (e.g. sequences like "Foo var0 = null" or
-   * "int var0 = 1"), including general components, class literals and package literals.
+   * "int var0 = 1"), including general components and literals.
    *
    * @return the sequences for primitive values
    */
@@ -253,11 +330,13 @@ public class ComponentManager {
     if (packageLiterals != null) {
       result.addAll(packageLiterals.getAllSequences());
     }
+
+    // Add primitive sequences from general components.
     for (PrimitiveType type : JavaTypes.getPrimitiveTypes()) {
-      result.addAll(gralComponents.getSequencesForType(type, true, false).toJDKList());
+      CollectionsPlume.addAll(result, gralComponents.getSequencesForType(type, true, false));
     }
-    result.addAll(
-        gralComponents.getSequencesForType(JavaTypes.STRING_TYPE, true, false).toJDKList());
+    CollectionsPlume.addAll(
+        result, gralComponents.getSequencesForType(JavaTypes.STRING_TYPE, true, false));
     return result;
   }
 

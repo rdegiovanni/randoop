@@ -1,8 +1,13 @@
 package randoop.util;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.regex.qual.Regex;
 import org.plumelib.util.StringsPlume;
 import randoop.Globals;
 
@@ -14,7 +19,7 @@ public final class Util {
   }
 
   /**
-   * Return true if a and b are equal (both true or both false).
+   * Returns true if a and b are equal (both true or both false).
    *
    * @param a first boolean to test
    * @param b second bject to test
@@ -25,7 +30,7 @@ public final class Util {
   }
 
   /**
-   * Return true if a is false or b is true.
+   * Returns true if a is false or b is true.
    *
    * @param a first boolean to test
    * @param b second bject to test
@@ -36,7 +41,7 @@ public final class Util {
   }
 
   /**
-   * Return true if the string is a legal Java identifier.
+   * Returns true if the string is a legal Java identifier.
    *
    * @param s string to test
    * @return true if the string is a legal Java identifier
@@ -76,7 +81,7 @@ public final class Util {
   }
 
   /**
-   * Return the number of times that the pattern appears in the text.
+   * Returns the number of times that the pattern appears in the text.
    *
    * @param text string to search
    * @param pattern string pattern to search for
@@ -158,17 +163,55 @@ public final class Util {
    * @return the text modified by replacing original names with replacement names
    */
   public static String replaceWords(String text, Map<String, String> replacements) {
-    Pattern namesPattern =
+    @SuppressWarnings({"regex:argument", "regex:assignment"}) // string manipulation
+    @Regex(1) Pattern namesPattern =
         Pattern.compile("\\b(" + StringsPlume.join("|", replacements.keySet().toArray()) + ")\\b");
     Matcher namesMatcher = namesPattern.matcher(text);
     StringBuilder b = new StringBuilder();
     int position = 0;
     while (namesMatcher.find(position)) {
       b.append(text.substring(position, namesMatcher.start(1)));
-      b.append(replacements.get(namesMatcher.group(1)));
+      @SuppressWarnings("nullness:assignment") // https://tinyurl.com/cfissue/4006
+      @NonNull String name = namesMatcher.group(1);
+      b.append(replacements.get(name));
       position = namesMatcher.end(1);
     }
     b.append(text.substring(position));
     return b.toString();
+  }
+
+  /**
+   * Returns the path if it is absolute, otherwise returns the path AND the absolute path.
+   *
+   * @param path a file path
+   * @return the path, and the absolute path if different
+   */
+  public static String pathAndAbsolute(Path path) {
+    if (!path.isAbsolute()) {
+      return path.toString();
+    } else {
+      return path + " = " + path.toAbsolutePath();
+    }
+  }
+
+  /**
+   * Returns the file if it is absolute, otherwise returns the file AND the absolute file.
+   *
+   * @param file a file
+   * @return the file, and the absolute file if different
+   */
+  public static String fileAndAbsolute(File file) {
+    return pathAndAbsolute(file.toPath());
+  }
+
+  /**
+   * Returns the filename if it is absolute, otherwise returns the filename AND the absolute
+   * filename.
+   *
+   * @param filename a file name
+   * @return the filename, and the absolute filename if different
+   */
+  public static String filenameAndAbsolute(String filename) {
+    return pathAndAbsolute(Paths.get(filename));
   }
 }

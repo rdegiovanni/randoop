@@ -1,8 +1,7 @@
 package randoop.reflection;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.Set;
 import randoop.operation.NonreceiverTerm;
 import randoop.operation.TypedOperation;
 import randoop.sequence.Sequence;
@@ -19,27 +18,41 @@ import randoop.util.MultiMap;
  */
 public class ClassLiteralExtractor extends DefaultClassVisitor {
 
+  /** Map from a class under test to the literal sequences that appear in it. */
   private MultiMap<ClassOrInterfaceType, Sequence> literalMap;
 
+<<<<<<< HEAD
   public ClassLiteralExtractor(MultiMap<ClassOrInterfaceType, Sequence> literalMap) {
+=======
+  /**
+   * Creates a visitor that adds discovered literals to the given map.
+   *
+   * @param literalMap a map from types to sequences in them that yield a literal
+   */
+  ClassLiteralExtractor(MultiMap<ClassOrInterfaceType, Sequence> literalMap) {
+>>>>>>> upstream/master
     this.literalMap = literalMap;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>For each class, add to the literal map a sequence for each literal that the class uses.
+   *
+   * <p>This method does all the work; there is no {@code visitAfter()} method.
+   */
   @Override
   public void visitBefore(Class<?> c) {
-    Collection<ClassFileConstants.ConstantSet> constList =
-        Collections.singletonList(ClassFileConstants.getConstants(c.getName()));
-    MultiMap<Class<?>, NonreceiverTerm> constantMap = ClassFileConstants.toMap(constList);
-    for (Class<?> constantClass : constantMap.keySet()) {
-      ClassOrInterfaceType constantType = ClassOrInterfaceType.forClass(constantClass);
-      for (NonreceiverTerm term : constantMap.getValues(constantClass)) {
-        Sequence seq =
-            new Sequence()
-                .extend(
-                    TypedOperation.createNonreceiverInitialization(term),
-                    new ArrayList<Variable>());
-        literalMap.add(constantType, seq);
-      }
+    ClassOrInterfaceType containingType = ClassOrInterfaceType.forClass(c);
+    ClassFileConstants.ConstantSet constantSet = ClassFileConstants.getConstants(c.getName());
+    Set<NonreceiverTerm> nonreceiverTerms =
+        ClassFileConstants.constantSetToNonreceiverTerms(constantSet);
+    for (NonreceiverTerm term : nonreceiverTerms) {
+      Sequence seq =
+          new Sequence()
+              .extend(
+                  TypedOperation.createNonreceiverInitialization(term), new ArrayList<Variable>(0));
+      literalMap.add(containingType, seq);
     }
   }
 }

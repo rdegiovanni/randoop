@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import randoop.main.RandoopBug;
 
 /** A set of checks, including at most one ExceptionCheck. */
@@ -13,7 +14,7 @@ public class RegressionChecks implements TestChecks<RegressionChecks> {
   public static RegressionChecks EMPTY = new RegressionChecks();
 
   private Set<Check> checks;
-  private ExceptionCheck exceptionCheck;
+  private @Nullable ExceptionCheck exceptionCheck;
 
   /** Create an empty set of regression checks. */
   public RegressionChecks() {
@@ -74,7 +75,7 @@ public class RegressionChecks implements TestChecks<RegressionChecks> {
    * {@inheritDoc}
    *
    * @return map of non-exception checks in this object. each mapped to true, indicating it is
-   *     passing
+   *     passing.
    */
   @Override
   public Set<Check> checks() {
@@ -107,7 +108,7 @@ public class RegressionChecks implements TestChecks<RegressionChecks> {
   }
 
   @Override
-  public boolean equals(Object obj) {
+  public boolean equals(@Nullable Object obj) {
     if (this == obj) {
       return true;
     }

@@ -87,7 +87,7 @@ public class InstantiationTest {
     assertEquals(methodNames.size(), methodCount);
   }
 
-  /**
+  /*
    * This test fails if {@code D_BST} is removed since model always chooses {@code String} for
    * parameter to {@code BST} and without {@code D_BST} there is no class that implements {@code
    * C_BST<String>}.
@@ -165,7 +165,7 @@ public class InstantiationTest {
     addTypes(JavaTypes.STRING_TYPE, inputTypes);
     try {
       addTypes(Type.forName("randoop.reflection.StringComparator"), inputTypes);
-    } catch (ClassNotFoundException e) {
+    } catch (ClassNotFoundException  | NoClassDefFoundError e) {
       fail("cannot build type for comparator");
     }
     Set<String> nullOKNames = new HashSet<>();
@@ -359,8 +359,7 @@ public class InstantiationTest {
     if (type.isClassOrInterfaceType()) {
       ClassOrInterfaceType classType = (ClassOrInterfaceType) type;
       if (!(classType.isGeneric() || classType.hasWildcard())) {
-        typeSet.add(classType);
-        typeSet.addAll(classType.getSuperTypes());
+        typeSet.addAll(classType.getSupertypesInclusive());
       }
     }
   }

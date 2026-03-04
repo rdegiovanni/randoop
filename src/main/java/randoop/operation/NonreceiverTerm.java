@@ -2,9 +2,11 @@ package randoop.operation;
 
 import java.util.List;
 import java.util.Objects;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.plumelib.util.StringsPlume;
 import randoop.ExecutionOutcome;
 import randoop.NormalExecution;
+import randoop.main.RandoopBug;
 import randoop.sequence.StringTooLongException;
 import randoop.sequence.Value;
 import randoop.sequence.Variable;
@@ -20,7 +22,7 @@ import randoop.types.TypeTuple;
  *
  * <p>As an {@link Operation}, a value v of type T is formally represented by an operation v : []
  * &rarr; T, with no input types, and the type of the value as the output type. This kind of
- * operation is a <i>ground</i> term &mdash; it requires no inputs.
+ * operation is a <i>ground</i> term that requires no inputs.
  *
  * <p>The execution of this {@link Operation} simply returns the value.
  */
@@ -29,36 +31,43 @@ public final class NonreceiverTerm extends CallableOperation {
   /** The {@link Type} of this non-receiver term. */
   private final Type type;
 
-  /** The value of this non-receiver term. Must be null, a String, a boxed primitive, or a Class. */
-  private final Object value;
+  /**
+   * The value of this non-receiver term. Must be null, a String, a boxed primitive, or a Class. Is
+   * null only if {@link #type} is not String, primitive, or {@code JavaTypes.CLASS_TYPE}.
+   */
+  private final @Nullable Object value;
 
   /**
-   * Constructs a NonreceiverTerm with type t and value o.
+   * Constructs a NonreceiverTerm.
    *
    * @param type the type of the term
    * @param value the value of the term
    */
   public NonreceiverTerm(Type type, Object value) {
-    if (type == null) {
-      throw new IllegalArgumentException("type should not be null.");
-    }
-
-    if (type.isVoid()) {
-      throw new IllegalArgumentException("type should not be void.");
+    if (type == null || type.isVoid()) {
+      throw new RandoopBug("type should not be null or void: " + type);
     }
 
     if (type.isPrimitive() || type.isBoxedPrimitive()) {
       if (value == null) {
         if (type.isPrimitive()) {
-          throw new IllegalArgumentException("primitive-like values cannot be null.");
+          throw new RandoopBug(
+              String.format(
+                  "primitive-like values cannot be null: type=%s, value=%s", type, value));
         }
       } else {
         if (!type.isAssignableFromTypeOf(value)) {
-          throw new IllegalArgumentException(
-              "value.getClass()=" + value.getClass() + ",type=" + type);
+          throw new RandoopBug(
+              "value=" + value + ", value.getClass()=" + value.getClass() + ",type=" + type);
         }
         if (!NonreceiverTerm.isNonreceiverType(value.getClass())) {
-          throw new IllegalArgumentException("value is not a primitive-like value.");
+          throw new RandoopBug(
+              "value is not a primitive-like value: value = "
+                  + value
+                  + ", value.getClass() = "
+                  + value.getClass()
+                  + ", type = "
+                  + type);
         }
       }
     } else if (type.isString()) {
@@ -69,8 +78,7 @@ public final class NonreceiverTerm extends CallableOperation {
     } else if (!type.equals(JavaTypes.CLASS_TYPE)) {
       // If it's not a primitive, string, or Class value, then it must be null.
       if (value != null) {
-        throw new IllegalArgumentException(
-            "value must be null for type " + type + " but was " + value);
+        throw new RandoopBug("value must be null for type " + type + " but was " + value);
       }
     }
 
@@ -79,7 +87,7 @@ public final class NonreceiverTerm extends CallableOperation {
   }
 
   /**
-   * Determines whether the given {@code Class<?>} is the type of a non-receiver term.
+   * Returns true if the given {@code Class<?>} is the type of a non-receiver term.
    *
    * @param c the {@code Class<?>} object
    * @return true iff the type is primitive, boxed primitive, {@code String}, or {@code Class}
@@ -91,9 +99,9 @@ public final class NonreceiverTerm extends CallableOperation {
         || c.equals(Class.class);
   }
 
-  /** Indicates whether this object is equal to o. */
+  /** Returns true if this object is equal to o. */
   @Override
-  public boolean equals(Object o) {
+  public boolean equals(@Nullable Object o) {
     if (this == o) {
       return true;
     }
@@ -115,6 +123,7 @@ public final class NonreceiverTerm extends CallableOperation {
   @Override
   public String toString() {
     if (type.equals(JavaTypes.CLASS_TYPE)) {
+      assert value != null : "@AssumeAssertion(nullness): value != null if type is a class";
       return ((Class<?>) value).getName() + ".class";
     }
     return Objects.toString(value);
@@ -161,12 +170,12 @@ public final class NonreceiverTerm extends CallableOperation {
    * @return value of this {@link NonreceiverTerm}
    */
   @Override
-  public Object getValue() {
+  public @Nullable Object getValue() {
     return value;
   }
 
   /**
-   * Return the type.
+   * Returns the type.
    *
    * @return the type
    */
@@ -302,7 +311,7 @@ public final class NonreceiverTerm extends CallableOperation {
     Type type;
     try {
       type = Type.forName(typeString);
-    } catch (ClassNotFoundException e1) {
+    } catch (ClassNotFoundException | NoClassDefFoundError e1) {
       String msg =
           "Error when parsing type/value pair "
               + s

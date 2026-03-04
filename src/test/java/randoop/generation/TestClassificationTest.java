@@ -17,6 +17,7 @@ import org.checkerframework.checker.signature.qual.ClassGetName;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.plumelib.util.SIList;
 import randoop.DummyVisitor;
 import randoop.ExceptionalExecution;
 import randoop.ExecutionOutcome;
@@ -44,7 +45,6 @@ import randoop.test.TestChecks;
 import randoop.types.JavaTypes;
 import randoop.util.MultiMap;
 import randoop.util.ReflectionExecutor;
-import randoop.util.SimpleList;
 import randoop.util.predicate.AlwaysTrue;
 
 /**
@@ -213,7 +213,7 @@ public class TestClassificationTest {
       if (eck != null) {
         assertTrue(cks.hasChecks());
         assertTrue(
-            "should be expected exception, was" + eck.getClass().getName(),
+            "should be ExpectedExceptionCheck, was " + eck.getClass().getName() + ": " + eck,
             eck instanceof ExpectedExceptionCheck);
       }
     }
@@ -322,7 +322,7 @@ public class TestClassificationTest {
       if (eck != null) {
         assertTrue(cks.hasChecks());
         assertTrue(
-            "should be expected exception, was" + eck.getClass().getName(),
+            "should be EmptyExceptionCheck, was " + eck.getClass().getName() + ": " + eck,
             eck instanceof EmptyExceptionCheck);
       } else {
         assertFalse(cks.hasChecks());
@@ -370,7 +370,7 @@ public class TestClassificationTest {
     List<ExecutableSequence> eTests = gen.getErrorTestSequences();
     assertEquals(0, eTests.size());
 
-    SimpleList<Sequence> sequences = componentManager.getSequencesForType(JavaTypes.BOOLEAN_TYPE);
+    SIList<Sequence> sequences = componentManager.getSequencesForType(JavaTypes.BOOLEAN_TYPE);
     for (ExecutableSequence es : rTests) {
       if (!es.isNormalExecution()) {
         int exceptionIndex = es.getNonNormalExecutionIndex();
@@ -412,15 +412,13 @@ public class TestClassificationTest {
     }
     final List<TypedOperation> model = operationModel.getOperations();
 
-    RandoopListenerManager listenerMgr = new RandoopListenerManager();
     ForwardGenerator gen =
         new ForwardGenerator(
             model,
             new LinkedHashSet<TypedOperation>(),
             new GenInputsAbstract.Limits(),
             componentMgr,
-            null,
-            listenerMgr,
+            /* stopper= */ null,
             operationModel.getClassTypes());
     Predicate<ExecutableSequence> isOutputTest = new AlwaysTrue<>();
     gen.setTestPredicate(isOutputTest);
@@ -442,6 +440,6 @@ public class TestClassificationTest {
   private ComponentManager getComponentManager() {
     Collection<Sequence> components = new LinkedHashSet<>();
     components.addAll(SeedSequences.defaultSeeds());
-    return new ComponentManager(components);
+    return new ComponentManager(components, IS_PUBLIC);
   }
 }

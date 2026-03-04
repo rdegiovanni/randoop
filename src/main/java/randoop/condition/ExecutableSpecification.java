@@ -1,7 +1,10 @@
 package randoop.condition;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * The executable version of an {@link randoop.condition.specification.OperationSpecification}. It
@@ -44,10 +47,7 @@ public class ExecutableSpecification {
 
   /** Creates an empty {@link ExecutableSpecification} object. */
   public ExecutableSpecification() {
-    this(
-        new ArrayList<ExecutableBooleanExpression>(),
-        new ArrayList<GuardPropertyPair>(),
-        new ArrayList<GuardThrowsPair>());
+    this(new ArrayList<>(0), new ArrayList<>(0), new ArrayList<>(0));
   }
 
   /**
@@ -131,7 +131,7 @@ public class ExecutableSpecification {
    * {@link ThrowsClause} to the set of expected exceptions.
    *
    * @param args the argument values
-   * @return the set of exceptions for which the guard expression evaluated to true
+   * @return the list of exceptions for which the guard expression evaluated to true
    */
   private List<ThrowsClause> checkGuardThrowsPairs(Object[] args) {
     List<ThrowsClause> throwsClauses = new ArrayList<>();
@@ -153,7 +153,7 @@ public class ExecutableSpecification {
    * @return the property for the first {@link GuardPropertyPair} for which the guard expression
    *     evaluates to true; null if there is none
    */
-  private ExecutableBooleanExpression checkGuardPropertyPairs(Object[] args) {
+  private @Nullable ExecutableBooleanExpression checkGuardPropertyPairs(Object[] args) {
     for (GuardPropertyPair gpPair : guardPropertyPairs) {
       ExecutableBooleanExpression guard = gpPair.guard;
       if (guard.check(args)) {
@@ -161,6 +161,37 @@ public class ExecutableSpecification {
       }
     }
     return null;
+  }
+
+  /**
+   * Merges two ExecutableSpecifications into a new one that contains the union of their components.
+   *
+   * @param spec1 the first ExecutableSpecification to merge
+   * @param spec2 the second ExecutableSpecification to merge
+   * @return a new ExecutableSpecification that is the result of the merge
+   */
+  public static ExecutableSpecification merge(
+      ExecutableSpecification spec1, ExecutableSpecification spec2) {
+    // Merge and remove duplicates for preExpressions
+    Set<ExecutableBooleanExpression> mergedPreExpressionsSet =
+        new LinkedHashSet<>(spec1.preExpressions);
+    mergedPreExpressionsSet.addAll(spec2.preExpressions);
+    List<ExecutableBooleanExpression> mergedPreExpressions =
+        new ArrayList<>(mergedPreExpressionsSet);
+
+    // Merge and remove duplicates for guardPropertyPairs
+    Set<GuardPropertyPair> mergedGuardPropertyPairsSet =
+        new LinkedHashSet<>(spec1.guardPropertyPairs);
+    mergedGuardPropertyPairsSet.addAll(spec2.guardPropertyPairs);
+    List<GuardPropertyPair> mergedGuardPropertyPairs = new ArrayList<>(mergedGuardPropertyPairsSet);
+
+    // Merge and remove duplicates for guardThrowsPairs
+    Set<GuardThrowsPair> mergedGuardThrowsPairsSet = new LinkedHashSet<>(spec1.guardThrowsPairs);
+    mergedGuardThrowsPairsSet.addAll(spec2.guardThrowsPairs);
+    List<GuardThrowsPair> mergedGuardThrowsPairs = new ArrayList<>(mergedGuardThrowsPairsSet);
+
+    return new ExecutableSpecification(
+        mergedPreExpressions, mergedGuardPropertyPairs, mergedGuardThrowsPairs);
   }
 
   /**
@@ -173,8 +204,8 @@ public class ExecutableSpecification {
   }
 
   /**
-   * Indicates whether the full specification is empty: this {@link ExecutableSpecification}, and
-   * any member of the parent list, has no guard expresions, no property pairs, and no throws pairs.
+   * Returns true if the full specification is empty: this {@link ExecutableSpecification}, and any
+   * member of the parent list, has no guard expresions, no property pairs, and no throws pairs.
    *
    * @return true if there are no guard expressions, or property or throws pairs in this or the
    *     parent list, false otherwise

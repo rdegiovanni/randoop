@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import org.plumelib.util.MapsP;
 import randoop.sequence.Sequence;
 import randoop.types.JavaTypes;
 import randoop.types.Type;
@@ -70,8 +71,15 @@ public final class SeedSequences {
     return SeedSequences.objectsToSeeds(seeds);
   }
 
+  /**
+   * Given a set of seed objects (each a primitive wrapper), return a set of sequences (each of
+   * length one) that create them.
+   *
+   * @param seeds a list of primitive wrappers
+   * @return sequences that create the primitives
+   */
   public static Set<Sequence> objectsToSeeds(List<Object> seeds) {
-    Set<Sequence> seedSequences = new LinkedHashSet<>();
+    Set<Sequence> seedSequences = new LinkedHashSet<>(MapsP.mapCapacity(seeds));
     for (Object seed : seeds) {
       if (seed == null) {
         seedSequences.add(Sequence.zero(JavaTypes.STRING_TYPE));
@@ -86,7 +94,7 @@ public final class SeedSequences {
    * Returns the set of seed values with the given raw type.
    *
    * @param type the type
-   * @return the set of seed values with the given raw type
+   * @return the seed values with the given raw type
    */
   static Set<Object> getSeeds(Type type) {
     Set<Object> result = new LinkedHashSet<>();
