@@ -21,16 +21,12 @@ public class ClassLiteralExtractor extends DefaultClassVisitor {
   /** Map from a class under test to the literal sequences that appear in it. */
   private MultiMap<ClassOrInterfaceType, Sequence> literalMap;
 
-<<<<<<< HEAD
-  public ClassLiteralExtractor(MultiMap<ClassOrInterfaceType, Sequence> literalMap) {
-=======
   /**
    * Creates a visitor that adds discovered literals to the given map.
    *
    * @param literalMap a map from types to sequences in them that yield a literal
    */
-  ClassLiteralExtractor(MultiMap<ClassOrInterfaceType, Sequence> literalMap) {
->>>>>>> upstream/master
+  public ClassLiteralExtractor(MultiMap<ClassOrInterfaceType, Sequence> literalMap) {
     this.literalMap = literalMap;
   }
 
