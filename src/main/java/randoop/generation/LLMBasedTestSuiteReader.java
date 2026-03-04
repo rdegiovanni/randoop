@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  * Reads a developer-written JUnit test suite and uses an LLM (Claude or GPT)
@@ -36,7 +37,7 @@ import java.util.logging.Logger;
  */
 public class LLMBasedTestSuiteReader {
 
-    private static final Logger LOG = Logger.getLogger(LLMBasedTestSuiteReader.class.getName());
+//    private static final Logger LOG = Logger.getLogger(LLMBasedTestSuiteReader.class.getName());
 
     // -----------------------------------------------------------------------
     // Provider enum
@@ -139,7 +140,7 @@ public class LLMBasedTestSuiteReader {
             throw new IllegalArgumentException("Unknown LLM provider: " + provider);
         }
 
-        LOG.fine("Raw LLM reply:\n" + rawReply);
+        System.out.println("Raw LLM reply:\n" + rawReply);
 
         List<String> blocks   = extractSequenceBlocks(rawReply);
         List<Sequence> result = new ArrayList<Sequence>();
@@ -154,11 +155,10 @@ public class LLMBasedTestSuiteReader {
             try {
                 Sequence seq = Sequence.parse(lines);
                 result.add(seq);
-                LOG.fine("Sequence " + i + " parsed successfully ("
+                System.out.println("Sequence " + i + " parsed successfully ("
                         + seq.size() + " statement(s)).");
             } catch (SequenceParseException | Error e) {
-                LOG.log(Level.WARNING,
-                        "Sequence " + i + " failed to parse, skipping: "
+                System.out.println("WARNING: Sequence " + i + " failed to parse, skipping: "
                                 + e.getMessage());
             }
         }
@@ -652,7 +652,7 @@ public class LLMBasedTestSuiteReader {
      */
     private static String requireEnvVar(String name) {
         String value = System.getenv(name);
-        if (value == null || value.isBlank()) {
+        if (value == null || StringUtils.isBlank(value)){ //value.isBlank()) {
             throw new IllegalStateException(
                     "Environment variable '" + name + "' is not set. "
                             + "Please export it before running TestSuiteReader.");
