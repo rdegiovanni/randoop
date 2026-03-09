@@ -80,14 +80,21 @@ public class LLMBasedTestSuiteReader {
     // Public API
     // -----------------------------------------------------------------------
 
-    public static List<Sequence> readSequencesFromFile(Path pathToFile) {
+    public static List<Sequence> readSequencesFromFile(Path classUnderTestPath,
+                                                       Path testSuitePath){
         List<Sequence> sequences = new ArrayList<>();
-        if (pathToFile != null) {
+        if (classUnderTestPath != null && testSuitePath != null) {
             try {
-                BufferedReader br = new BufferedReader(new FileReader(pathToFile.toFile()));
+                String classUnderTestSource = new String(
+                java.nio.file.Files.readAllBytes(classUnderTestPath),
+                java.nio.charset.StandardCharsets.UTF_8);
+                BufferedReader br = new BufferedReader(new FileReader(testSuitePath.toFile()));
                 String line;
                 while ((line = br.readLine()) != null) {
-                    List<Sequence> suite_sequences = LLMBasedTestSuiteReader.readSequencesFromFile(line,LlmProvider.GPT);
+                    String testSuiteSource = new String(
+                            java.nio.file.Files.readAllBytes(Paths.get(line)),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    List<Sequence> suite_sequences = testToSequence(classUnderTestSource,testSuiteSource,LlmProvider.GPT);
                     sequences.addAll(suite_sequences);
                 }
 //      } catch (FileNotFoundException e) {
@@ -95,43 +102,46 @@ public class LLMBasedTestSuiteReader {
             } catch (Exception e) {
                 System.out.println(e.getMessage());
             }
-            System.out.println("TestSuiteReader: Sequences read from file: " + sequences.size());
+            System.out.println("LLMBasedTestSuiteReader: Sequences read from file: " + sequences.size());
         }
         return sequences;
     }
 
     /**
-     * Reads the JUnit test suite at {@code pathToFile}, sends it to the
-     * specified LLM, and returns the list of Randoop {@link Sequence} objects
-     * that the LLM generated.
+     * Reads the JUnit test suite at {@code testSuitePath}, sends it together
+     * with the source code of the class under test at {@code classUnderTestPath}
+     * to the specified LLM, and returns the list of Randoop {@link Sequence}
+     * objects that the LLM generated.
      *
-     * <p>The LLM is prompted to generate sequences that are simpler than the
-     * original tests so that they are reliably parseable by Randoop.
-     * Sequences that still fail to parse after the LLM response are skipped
-     * with a warning logged.
+     * <p>The LLM uses the class under test as the authoritative source for
+     * method signatures, constructor parameters, and return types, and uses
+     * the JUnit test suite only as an example of how the class is exercised.
+     * The generated sequences do not need to reproduce the original tests exactly.
      *
-     * @param filename path to a Java source file containing JUnit test methods
-     * @param provider   the LLM provider ({@code CLAUDE} or {@code GPT})
+     * @param classUnderTestSource Java source file of the class under test
+     * @param testSuiteSource      Java source file of the JUnit test suite
+     * @param provider           the LLM provider ({@code CLAUDE} or {@code GPT})
      * @return a (possibly empty) list of Randoop sequences
-     * @throws IOException          if the file cannot be read or the HTTP call fails
-     * @throws InterruptedException if the HTTP call is interrupted
+     * @throws IOException if either file cannot be read or the HTTP call fails
      */
-    public static List<Sequence> readSequencesFromFile(String filename,
+    public static List<Sequence> testToSequence(String classUnderTestSource,
+                                                       String testSuiteSource,
                                                        LlmProvider provider)
             throws IOException {
 
-        // JDK 11+: Files.readString(pathToFile)
-        // JDK 1.8 replacement:
-        Path pathToFile = Paths.get(filename);
-        String testSource = new String(
-                java.nio.file.Files.readAllBytes(pathToFile),
-                java.nio.charset.StandardCharsets.UTF_8);
+        // JDK 1.8 compatible file reading.
+//        String classUnderTestSource = new String(
+//                java.nio.file.Files.readAllBytes(classUnderTestPath),
+//                java.nio.charset.StandardCharsets.UTF_8);
+//
+//        String testSuiteSource = new String(
+//                java.nio.file.Files.readAllBytes(testSuitePath),
+//                java.nio.charset.StandardCharsets.UTF_8);
 
-        String prompt  = buildPrompt(testSource);
+        String prompt    = buildPrompt(classUnderTestSource, testSuiteSource);
         String rawReply;
 
-        // JDK 14+: switch expression on enum
-        // JDK 1.8 replacement:
+        // JDK 1.8 compatible: if/else instead of switch expression.
         if (provider == LlmProvider.CLAUDE) {
             rawReply = callClaude(prompt);
         } else if (provider == LlmProvider.GPT) {
@@ -152,13 +162,20 @@ public class LLMBasedTestSuiteReader {
             List<String> lines = parseBlockIntoLines(block);
             if (lines.isEmpty()) continue;
 
+            System.out.println("Attempting to parse sequence " + i + " with "
+                    + lines.size() + " line(s):");
+            for (int j = 0; j < lines.size(); j++) {
+                System.out.println("  [" + j + "] " + lines.get(j));
+            }
+
             try {
                 Sequence seq = Sequence.parse(lines);
                 result.add(seq);
                 System.out.println("Sequence " + i + " parsed successfully ("
                         + seq.size() + " statement(s)).");
             } catch (SequenceParseException | Error e) {
-                System.out.println("WARNING: Sequence " + i + " failed to parse, skipping: "
+                System.out.println(Level.WARNING +
+                        " Sequence " + i + " failed to parse, skipping: "
                                 + e.getMessage());
             }
         }
@@ -173,28 +190,38 @@ public class LLMBasedTestSuiteReader {
     /**
      * Builds the prompt that is sent to the LLM.
      *
-     * <p>The prompt explains:
+     * <p>The prompt provides:
      * <ol>
-     *   <li>The exact Randoop parseable-sequence grammar.</li>
-     *   <li>Every operation kind with worked examples.</li>
-     *   <li>All known limitations (no generics, no control flow, all inputs
-     *       must be previously declared variables, etc.).</li>
-     *   <li>The instruction to simplify rather than faithfully translate.</li>
-     *   <li>The required {@code ===SEQ_START===} / {@code ===SEQ_END===}
-     *       delimiters so the response can be parsed mechanically.</li>
+     *   <li>The source code of the class under test, so the LLM has authoritative
+     *       knowledge of all method signatures, constructor parameters, argument
+     *       types, and return types.</li>
+     *   <li>The JUnit test suite, used only as an example of how the class under
+     *       test is exercised — the LLM is not asked to reproduce it exactly.</li>
+     *   <li>The complete Randoop parseable-sequence grammar with worked examples.</li>
+     *   <li>All known limitations (no generics, no control flow, all inputs must
+     *       be previously declared variables, etc.).</li>
+     *   <li>The required delimiters so the response can be parsed mechanically.</li>
      * </ol>
      *
-     * @param testSource the full Java source of the JUnit test class
+     * @param classUnderTestSource the full Java source of the class under test
+     * @param testSuiteSource      the full Java source of the JUnit test suite
      * @return the prompt string
      */
-    private static String buildPrompt(String testSource) {
+    private static String buildPrompt(String classUnderTestSource, String testSuiteSource) {
         return "You are an expert in the Randoop automated test-generation tool for Java.\n"
                 + "\n"
                 + "## Your task\n"
-                + "Analyse the JUnit test class below and generate a list of Randoop-parseable\n"
-                + "sequences that can be used as generation seeds. The sequences do NOT need to\n"
-                + "reproduce every detail of the original tests. Prefer simpler sequences that\n"
-                + "are more likely to parse correctly.\n"
+                + "You are given two Java source files:\n"
+                + "  1. The CLASS UNDER TEST — the authoritative source for all constructor\n"
+                + "     signatures, method signatures, argument types, and return types.\n"
+                + "  2. A JUNIT TEST SUITE — an example of how the class under test is\n"
+                + "     exercised. Use it as inspiration only. You do NOT need to reproduce\n"
+                + "     the same test cases.\n"
+                + "\n"
+                + "Your goal is to generate Randoop-parseable sequences that exercise the\n"
+                + "class under test. Base ALL type names, method names, and constructor\n"
+                + "signatures STRICTLY on what you see in the class under test source code.\n"
+                + "Do not invent methods or constructors that are not present there.\n"
                 + "\n"
                 + "## Randoop parseable sequence format — complete specification\n"
                 + "\n"
@@ -210,6 +237,7 @@ public class LLMBasedTestSuiteReader {
                 + "    direct arguments to cons/method calls - every argument must be a\n"
                 + "    previously declared variable.\n"
                 + "  - Sequences are STRAIGHT-LINE CODE ONLY. No if/for/while/try.\n"
+                + "  - Do NOT include blank lines inside a sequence block.\n"
                 + "\n"
                 + "### Kind: prim - primitive or String initialisation\n"
                 + "Format:\n"
@@ -237,6 +265,8 @@ public class LLMBasedTestSuiteReader {
                 + "  - Argument types MUST be fully qualified and must NOT contain generic\n"
                 + "    parameters (use raw types, e.g. java.util.Collection not\n"
                 + "    java.util.Collection<java.lang.String>).\n"
+                + "  - Derive the exact constructor argument types from the CLASS UNDER TEST\n"
+                + "    source code — do not guess.\n"
                 + "  - No-arg constructor example:\n"
                 + "        var0 = cons : java.util.LinkedList.<init>() :\n"
                 + "  - One-arg constructor example:\n"
@@ -254,6 +284,8 @@ public class LLMBasedTestSuiteReader {
                 + "  - Return type is NOT part of the descriptor.\n"
                 + "  - Void methods still need an output variable name.\n"
                 + "  - Fully qualified class names and raw types, as for cons.\n"
+                + "  - Derive the exact method argument types from the CLASS UNDER TEST\n"
+                + "    source code — do not guess.\n"
                 + "  - Example (instance, no args):\n"
                 + "        var0 = cons : java.util.LinkedList.<init>() :\n"
                 + "        var1 = method : java.util.LinkedList.size() : var0\n"
@@ -272,15 +304,17 @@ public class LLMBasedTestSuiteReader {
                 + "   in the SAME sequence. Never pass a literal directly to a constructor or\n"
                 + "   method - declare it first with prim.\n"
                 + "4. Do not include JUnit assertions (assertEquals, assertTrue, etc.).\n"
-                + "5. Do not include calls to private helper methods of the test class.\n"
+                + "5. Do not include calls to private or helper methods of the test class.\n"
                 + "6. Do not include control flow (if, for, while, try/catch).\n"
-                + "7. If a statement from the original test cannot be expressed as a single\n"
-                + "   straight-line Randoop statement, SKIP it or replace it with a simpler\n"
-                + "   equivalent that CAN be expressed.\n"
-                + "8. Prefer short sequences (3-8 statements). It is better to produce several\n"
-                + "   short valid sequences than one long invalid one.\n"
-                + "9. Each sequence must be self-contained: every variable it uses must be\n"
-                + "   declared within the same sequence.\n"
+                + "7. Only call methods and constructors that actually exist in the class\n"
+                + "   under test source code provided below.\n"
+                + "8. If a call cannot be expressed as a single straight-line Randoop\n"
+                + "   statement, SKIP it or replace it with a simpler equivalent.\n"
+                + "9. Prefer short sequences (3-8 statements). It is better to produce\n"
+                + "   several short valid sequences than one long invalid one.\n"
+                + "10. Each sequence must be self-contained: every variable it uses must\n"
+                + "    be declared within the same sequence.\n"
+                + "11. Do NOT include blank lines inside a sequence block.\n"
                 + "\n"
                 + "## Output format\n"
                 + "For EACH sequence, output it enclosed between the exact delimiters below\n"
@@ -289,16 +323,20 @@ public class LLMBasedTestSuiteReader {
                 + "===SEQ_START===\n"
                 + "var0 = ...\n"
                 + "var1 = ...\n"
-                + "...\n"
                 + "===SEQ_END===\n"
                 + "\n"
                 + "You may output as many sequence blocks as you think are useful.\n"
                 + "Do not include any explanation inside the delimiters - only the sequence lines.\n"
                 + "You MAY include brief comments outside the delimiters to explain your choices.\n"
                 + "\n"
-                + "## JUnit test class to analyse\n"
+                + "## Class under test (use this as the authoritative source for all signatures)\n"
                 + "```java\n"
-                + testSource + "\n"
+                + classUnderTestSource + "\n"
+                + "```\n"
+                + "\n"
+                + "## JUnit test suite (use this as inspiration only — do not reproduce it exactly)\n"
+                + "```java\n"
+                + testSuiteSource + "\n"
                 + "```\n";
     }
 
@@ -600,19 +638,26 @@ public class LLMBasedTestSuiteReader {
      * @return list of raw sequence block strings
      */
     private static List<String> extractSequenceBlocks(String rawReply) {
-        List<String> blocks = new ArrayList<>();
+        List<String> blocks = new ArrayList<String>();
         int searchFrom = 0;
         while (true) {
             int start = rawReply.indexOf(SEQ_START, searchFrom);
             if (start == -1) break;
             int contentStart = start + SEQ_START.length();
             int end = rawReply.indexOf(SEQ_END, contentStart);
+            String block;
             if (end == -1) {
-                // Unterminated block — take everything to the end of the string.
-                blocks.add(rawReply.substring(contentStart).trim());
+                // Unterminated block — take everything to end of string.
+                block = rawReply.substring(contentStart).trim();
+                if (!block.isEmpty()) {
+                    blocks.add(block);
+                }
                 break;
             }
-            blocks.add(rawReply.substring(contentStart, end).trim());
+            block = rawReply.substring(contentStart, end).trim();
+            if (!block.isEmpty()) {  // skip empty blocks
+                blocks.add(block);
+            }
             searchFrom = end + SEQ_END.length();
         }
         return blocks;

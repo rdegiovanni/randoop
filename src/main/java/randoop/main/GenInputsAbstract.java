@@ -64,6 +64,8 @@ public abstract class GenInputsAbstract extends CommandHandler {
   @Option("Serialize input/output tuples for the method matching serialize_method to this folder")
   public static String serialize_folder = "./";
 
+  @Option("File that contains the source of the class under test")
+  public static Path cutseed = null;
   @Option("File that list the test suites to use as seeds")
   public static Path testseeds = null;
   @Option("File that list the test suites to extract literals to be used as seeds")
