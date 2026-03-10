@@ -3,11 +3,7 @@ package randoop.generation;
 import randoop.sequence.Sequence;
 import randoop.sequence.SequenceParseException;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -217,9 +213,10 @@ public class LLMBasedTestSuiteReader {
             Files.createDirectories(parentDir);
         }
 
-        // Write content to file, creating it if it does not exist
+        // Write content to file using OutputStreamWriter for explicit UTF-8 encoding
         try (BufferedWriter writer = new BufferedWriter(
-                new FileWriter(path.toFile(), StandardCharsets.UTF_8))) {
+                new OutputStreamWriter(
+                        new FileOutputStream(path.toFile()), StandardCharsets.UTF_8))) {
             writer.write(content);
         }
     }
