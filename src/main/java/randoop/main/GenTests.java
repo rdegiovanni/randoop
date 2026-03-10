@@ -472,7 +472,7 @@ public class GenTests extends GenInputsAbstract {
     components.addAll(defaultSeeds);
     components.addAll(annotatedTestValues);
     // load seeded test suites
-    components.addAll(LLMBasedTestSuiteReader.readSequencesFromFile(GenInputsAbstract.cutseed,GenInputsAbstract.testseeds));
+    components.addAll(LLMBasedTestSuiteReader.readSequencesFromFile(GenInputsAbstract.seqsfile, GenInputsAbstract.cutseed,GenInputsAbstract.testseeds));
     components.addAll(TestSuiteReader.readLiteralsFromFile(GenInputsAbstract.testliterals));
 
     ComponentManager componentMgr = new ComponentManager(components, accessibility);

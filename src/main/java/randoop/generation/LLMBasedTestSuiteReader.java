@@ -6,6 +6,10 @@ import randoop.sequence.SequenceParseException;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -80,25 +84,36 @@ public class LLMBasedTestSuiteReader {
     // Public API
     // -----------------------------------------------------------------------
 
-    public static List<Sequence> readSequencesFromFile(Path classUnderTestPath,
+    public static List<Sequence> readSequencesFromFile(Path sequencesFilePath, Path classUnderTestPath,
                                                        Path testSuitePath){
         List<Sequence> sequences = new ArrayList<>();
-        if (classUnderTestPath != null && testSuitePath != null) {
+        if (sequencesFilePath != null) {
             try {
-                String classUnderTestSource = new String(
-                java.nio.file.Files.readAllBytes(classUnderTestPath),
-                java.nio.charset.StandardCharsets.UTF_8);
-                BufferedReader br = new BufferedReader(new FileReader(testSuitePath.toFile()));
-                String line;
-                while ((line = br.readLine()) != null) {
-                    String testSuiteSource = new String(
-                            java.nio.file.Files.readAllBytes(Paths.get(line)),
+                StringBuilder randoopSequences = new StringBuilder();
+                if (java.nio.file.Files.exists(sequencesFilePath)) {
+                    randoopSequences = new StringBuilder(new String(
+                            Files.readAllBytes(sequencesFilePath),
+                            StandardCharsets.UTF_8));
+                } else if (classUnderTestPath != null && testSuitePath != null) {
+                    String classUnderTestSource = new String(
+                            java.nio.file.Files.readAllBytes(classUnderTestPath),
                             java.nio.charset.StandardCharsets.UTF_8);
-                    List<Sequence> suite_sequences = testToSequence(classUnderTestSource,testSuiteSource,LlmProvider.GPT);
+                    BufferedReader br = new BufferedReader(new FileReader(testSuitePath.toFile()));
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        String testSuiteSource = new String(
+                                java.nio.file.Files.readAllBytes(Paths.get(line)),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                        randoopSequences.append(testToSequence(classUnderTestSource, testSuiteSource, LlmProvider.GPT));
+                    }
+                    if (randoopSequences.length() > 0)
+                        writeFile(sequencesFilePath,randoopSequences.toString());
+                }
+                if (randoopSequences.length() > 0) {
+                    List<Sequence> suite_sequences = sequencesToSequence(randoopSequences.toString());
                     sequences.addAll(suite_sequences);
                 }
-//      } catch (FileNotFoundException e) {
-//        throw new RuntimeException(e);
+
             } catch (Exception e) {
                 System.out.println(e.getMessage());
             }
@@ -124,7 +139,7 @@ public class LLMBasedTestSuiteReader {
      * @return a (possibly empty) list of Randoop sequences
      * @throws IOException if either file cannot be read or the HTTP call fails
      */
-    public static List<Sequence> testToSequence(String classUnderTestSource,
+    public static String testToSequence(String classUnderTestSource,
                                                        String testSuiteSource,
                                                        LlmProvider provider)
             throws IOException {
@@ -138,7 +153,7 @@ public class LLMBasedTestSuiteReader {
 //                java.nio.file.Files.readAllBytes(testSuitePath),
 //                java.nio.charset.StandardCharsets.UTF_8);
 
-        String prompt    = buildPrompt(classUnderTestSource, testSuiteSource);
+        String prompt = buildPrompt(classUnderTestSource, testSuiteSource);
         String rawReply;
 
         // JDK 1.8 compatible: if/else instead of switch expression.
@@ -151,7 +166,10 @@ public class LLMBasedTestSuiteReader {
         }
 
         System.out.println("Raw LLM reply:\n" + rawReply);
+        return rawReply;
+    }
 
+    public static List<Sequence> sequencesToSequence(String rawReply) {
         List<String> blocks   = extractSequenceBlocks(rawReply);
         List<Sequence> result = new ArrayList<Sequence>();
 
@@ -181,6 +199,26 @@ public class LLMBasedTestSuiteReader {
         }
 
         return result;
+    }
+
+    /**
+     * Writes the given content string to the specified file path.
+     * Creates all necessary parent directories and the file if they do not exist.
+     *
+     * @param path the target file path (e.g., "output/logs/result.txt")
+     * @param content  the string content to write into the file
+     * @throws IOException if an I/O error occurs during directory creation or file writing
+     */
+    public static void writeFile(Path path , String content) throws IOException {
+//        Path path = Paths.get(filePath);
+        // Create parent directories if they do not exist
+        Path parentDir = path.getParent();
+        if (parentDir != null) {
+            Files.createDirectories(parentDir);
+        }
+
+        // Write content to file, creating it if it does not exist
+        Files.writeString(path, content, StandardCharsets.UTF_8);
     }
 
     // -----------------------------------------------------------------------
