@@ -218,7 +218,10 @@ public class LLMBasedTestSuiteReader {
         }
 
         // Write content to file, creating it if it does not exist
-        Files.writeString(path, content, StandardCharsets.UTF_8);
+        try (BufferedWriter writer = new BufferedWriter(
+                new FileWriter(path.toFile(), StandardCharsets.UTF_8))) {
+            writer.write(content);
+        }
     }
 
     // -----------------------------------------------------------------------
