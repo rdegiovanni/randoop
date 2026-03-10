@@ -214,10 +214,13 @@ public class LLMBasedTestSuiteReader {
         }
 
         // Write content to file using OutputStreamWriter for explicit UTF-8 encoding
-        try (BufferedWriter writer = new BufferedWriter(
+        try {
+            BufferedWriter writer = new BufferedWriter(
                 new OutputStreamWriter(
-                        new FileOutputStream(path.toFile()), StandardCharsets.UTF_8))) {
+                        Files.newOutputStream(path.toFile().toPath()), StandardCharsets.UTF_8));
             writer.write(content);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 
