@@ -208,17 +208,20 @@ public class LLMBasedTestSuiteReader {
     public static void writeFile(Path path , String content) throws IOException {
 //        Path path = Paths.get(filePath);
         // Create parent directories if they do not exist
-        Path parentDir = path.getParent();
-        if (parentDir != null) {
-            Files.createDirectories(parentDir);
-        }
-
-        // Write content to file using OutputStreamWriter for explicit UTF-8 encoding
         try {
-            BufferedWriter writer = new BufferedWriter(
-                new OutputStreamWriter(
-                        Files.newOutputStream(path.toFile().toPath()), StandardCharsets.UTF_8));
-            writer.write(content);
+            Path parentDir = path.getParent();
+            if (parentDir != null) {
+                Files.createDirectories(parentDir);
+            }
+
+            // Write content to file using OutputStreamWriter for explicit UTF-8 encoding
+
+//            BufferedWriter writer = new BufferedWriter(
+//                new OutputStreamWriter(
+//                        Files.newOutputStream(path.toFile().toPath()), StandardCharsets.UTF_8));
+//            writer.write(content);
+            Files.writeString(path, content,
+                    StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
